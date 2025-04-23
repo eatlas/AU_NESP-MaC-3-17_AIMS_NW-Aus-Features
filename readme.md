@@ -50,25 +50,41 @@ This script downloads the third party datasets used in the preview maps, such as
 
 `data_downloader.py` is a utility library that is used by `01-download-preview-map-data.py`.
 
-- **`07a-download-qaqc-data.py`**
+- **`01a-download-sentinel2.py`**
+Downloads Sentinel-2 satellite imagery composites (15th percentile and low tide) for northern Australia and the Great Barrier Reef.
+
+- **`02-v0-3-clean-overlaps.py`**
+Removes overlaps between different reef types according to specific hierarchy rules, particularly focusing on High Intertidal Coral Reef features.
+
+- **`03-v0-3-class-cross-walk.py`**
+Transforms the RB_Type_L3 classification to a new, refactored classification system with additional attribute fields.
+
+- **`04-v0-3-merge-rocky-reefs.py`**
+Merges semi-automated intertidal rocky reef polygons into the main dataset, dissolving only where they touch existing rocky reef features.
+
+- **`05-v0-3-clip-rocks-from-reefs.py`**
+Removes overlap between Rocky Reef polygons and other feature types by clipping underlying polygons.
+
+- **`06-v0-3-correct-shallow-mask.py`**
+Applies manual corrections to the semi-automated Shallow Marine Mask by adding missed areas and removing false positives.
+
+- **`07-v0-3-clip-merge-shallow-sed.py`**
+Creates shallow sediment features from areas in the Shallow-mask not covered by existing reef features and adds them to the dataset.
+
+- **`08-v0-3-clip-land.py`**
+Clips the reef features dataset against the Australian coastline to remove any portions that overlap with land.
+
+- **`09a-download-qaqc-data.py`**
    Downloads additional datasets for quality assurance and quality control (QAQC). This includes bathymetry datasets.
 
-- **`07b-generate-qaqc-boundary-points.py`**
+- **`09b-generate-qaqc-boundary-points.py`**
     Generates QAQC random points along polygon boundaries for accuracy assessment. The points created from this script must be manually aligned to the true position of the boundaries.
 
-- **`07c-qaqc-assess-boundary-error.py`**
+- **`09c-qaqc-assess-boundary-error.py`**
     Compares boundary points against ground truth to assess positional accuracy.
 
-- **`07d-compare-reef-masks.py`**
+- **`09d-compare-reef-masks.py`**
     Compares manual and automated reef masks to evaluate true positives, false positives, and false negatives.
-
-# data / extras / AHO-Uncharted
-This shapefile is a rough map of all the areas that are marked as uncharted in the AHO ENC Simplified Series (AHO, n.d.). This was digitised from the AHO ENC Simplified Series WMS service at a digitisation scale of 1:240 k with a typical digitisation error of 30 - 100 m. The land side of the boundaries were only very roughly digitised, with the goal being to overlap the land area sufficiently that these boundaries could be trimmed using a land shapefile.
-Digitisation time: GOC 1 hour
-
-# References
-
-
 
 # Map stage notes
 The following is a set of notes detailing the processing that was applied in the development of each phase of the mapping. This phased approach provides a record of what features were detected and mapped at each stage of the project, where each stage represents the incorporation of new information.
