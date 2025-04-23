@@ -1,0 +1,5 @@
+working
+__pycache__
+deprecated
+venv_*
+data
