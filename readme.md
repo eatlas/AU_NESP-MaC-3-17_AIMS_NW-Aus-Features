@@ -93,9 +93,11 @@ The following is a set of notes detailing the processing that was applied in the
 This stage involved manual digitisation of reefs predominantly from Sentinel 2 imagery, although some additional high resolution image sources were used for Reef-Features_Ref1_RB. This phase includes mapping of the reefs by two relatively independent cartographers. 
 1. Reef-Features_Ref1_RB: Mapped by Rachel Bycroft. Full resolution reef mapping with the core focus on mapping coral reefs and rocky reefs, with sand banks as a lower priority. No intertidal sediment was mapped. This dataset is the base of the final dataset. The target for digitisation was 1:150k-250k scale with a maximum spatial error of 75 - 150 m. Features were mapped using the clustering rules developed for the Coral Sea Features mapping (approximately: features of the same type closer than 200 m are merged, sand between features is included, sand on the outside is included up to 50 m). Features were mapped and assigned as per the Reef Boundary Type classification (RB_Type_3). Complex areas were split based on types so that a coral reef growing outwards from a rocky reef would be mapped as two areas joined together. This mapping took approximately 450 hours.
 2. Rough-reef-mask_Ref2_EL: Mapped by Eric Lawrey. Half resolution mapping, with no type classification, but with intertidal areas included. This dataset started out as the rough reef masking to developing a semi-automated approach for mapping reefs and the intertidal zone (Lawrey, 2025). This mapping was extended to more comprehensively map reef boundaries, including small reefs, to act as a cross reference check for the Reef-Features_Ref1 dataset. It could be used to identify reefs that were missed in the primary reef mapping, helping to determine detection rate for each cartographer. The reef features were mapping at a rapid pace, with an average of 40 sec per feature. The target maximum boundary error was 250 m, however little care was taken to make the mapped boundaries smooth. The goal of this mapping was to mask out an shallow area, regardless of the benthic type.
-# Stage 2 - v0-2_merge-maps - Combining the reefs maps together
+
+## Stage 2 - v0-2_merge-maps - Combining the reefs maps together
 To improve the detection rate for small and hard to detect reefs in this stage Rachel combined the two reef maps (Reef-Features_Ref1_RB and Rough-reef-mask_Ref2_EL) by identifying features in the Rough-reef-mask_Ref2_EL that were missing in her mapping. The missing reefs were typically remapped from the satellite imagery rather than copying them from the Rough-reef-mask_Ref2_EL because the rough reef map features were typically too coarse in detail.
-# Stage 3 - v0-3_qc-1 - Quality control
+
+## Stage 3 - v0-3_qc-1 - Quality control
 This was the first round of quality control applied to the dataset. The principal editing file for this version is `data/v0-3_qc-1/in/NW-Features_RB_Type_L3/Reef Boundaries Review.shp`. This involved a review of all features by Eric Lawrey, noting missing features, areas that needed trimming, classification changes. These issues were noded in data/v0-2_merge-maps/Issues-v0-2/Issues-v0-2_partA and partB. These were split to allow Rachel to start work on fixing issues, while further review was being conducted. The review was conducted using the project Sentinel 2 composite imagery, individual daily Sentinel 2 imagery using the [Copernicus Browser](https://browser.dataspace.copernicus.eu/) setting the cloud cover low (~10%) then reviewing the imagery over several years. Aerial imagery for part of the Gulf of Carpentaria were also used help identify features. The goal was to identify images that would show a clear view of the feature, or changes over time that would help with type classification. The daily imagery was only used to assist in identifying difficult to classify areas. Approximately 70% of the coastline was covered in this review and it took approximately 25 hours.
 
 This review identified several key issues:
@@ -109,29 +111,33 @@ After the review Rachel worked on improving the high priority issues, resolving 
 
 Rachel then handed over the editing to Eric who then continues making priority improvements. Overall only approximately 60% of the priority issues were resolved due to limited time. 
 
-## New reef classification scheme - Names and attributes
+### New reef classification scheme - Names and attributes
 Some of the reefs near Montebellow Island are rocky in nature, however they have a biogenic carbonate origin, which could not be represented with the existing RB_Type_L3 classification scheme as all rocky reefs are assumed to be Terrigenous. To add a carbonate to rocky reefs would require potentially doubling of the rocky reef classification types. The RB_Type_L3 was intended to have a discrete named classification for every combination of attributes that are in use. This works up to a point. As more details are recorded about a reef, not all of this can be represented as a single classification name. To resolve this problem we retain named classes (Feat_L3) for all types that you would expect to put in a legend, i.e. feature names that an environmental manager is likely to care about. Additional qualifier attributes are then split into separate attributes. For this the relative position (Fringing, Platform), was moved into its own attribute. 
 
 The new classification was automatically applied to the existing mapping using `03-v0-3-class-cross-walk.py`. 
 
-## What to do with Montebellow / Barrow Island reefs
+### What to do with Montebellow / Barrow Island reefs
 There are extensive shallow reef areas around Montebellow and Barrow Islands. These areas are each approximately 550 km2 each. Rachel had initially mapped them as rocky reefs with a few small patch coral reefs in areas where there was obvious coral reef accretion. This didn't seemed to be accurate.  
 
 Research indicated that whole shallow plateau around the island is carbonate in origin. Coral monitoring sites showed that sites that did not look like a traditional coral reef in structure (rocky foundation, low amount of structural texture) had high levels of hard and soft coral cover. While many of the reef structures look rocky, they are covered in hard coral and thus should be considered as coral reefs. The large flat areas were converted to 'Reef Flat Shallow' to indicate that these areas are geomorphically related to and connected with the coral reef stuctures. 
 
-## Reviewing the classification of offshore reefs
+### Reviewing the classification of offshore reefs
 The classification of offshore reefs was review and corrected. Reefs were assigned as part of an atoll if the water around the reef was more than 200 m in depth. In some parts their were clusters of reefs near the 200 m contour. Given the uncertainty in the bathymetry dataset (Geoscience Australia AusBathy 250m 2024), only reefs that were significantly separated from clusters at the shelf edge were classified as atolls. 
 
 Those with atolls were classified as atoll platforms. Where a reef (hard exposed reef) existed on these platforms then they were cut out from the atoll and classified based on the same process as for Coral Sea. 
 
 The equivalent deep areas for reefs on the continental shelf were classified as Deep Platform Coral Reefs and the shallow portions as Platform Coral Reefs. Some of the Deep Platforms were actually just above the 30 m threshold and so these will still need some more work to treat the oceanic reefs and shelf reefs in a consistent manner.
 
-## Cleaning up for publication.
+### Cleaning up for publication.
 To get the dataset ready for publication and use by UQ for the habitat mapping the following processing was done on the dataset:
 1. Removing geometry errors created by manual editing. The `Vector / Geometry Tools / Check Geometry` tool in QGIS was used to find any issues. These were then fixed manually.
-1. Removed overlaps in High Intertidal Coral Reefs with other features. (`02-v0-3-clean-overlaps.py`)
-2. We apply the new classification scheme (`03-v0-3-class-cross-walk.py`).
-3. Merging in the semi-automated intertidal rocky reef mapping
+2. Removed overlaps in High Intertidal Coral Reefs with other features. (`02-v0-3-clean-overlaps.py`)
+3. We apply the new classification scheme (`03-v0-3-class-cross-walk.py`).
+4. Merge in the semi-automated intertidal rocky reef mapping. (`04-v0-4-merge-rocky-reefs.py`)
+5. We remove overlaps between the rocky reef features and the coral reefs (`05-v0-3-clip-rocks-from-reefs.py`)
+6. We use the semi-automated shallow mask to create an estimate for the shallow sediment areas. We first clean up this dataset by adding areas that were not mapped correctly (seagrass areas, and shallow foreshore in GOC) and removing spurious results, particularing narrow rivers.
+7. We estimate the sediment areas by using clipping reefs from the shallow mask, leaving, in theory, just soft sediment.
+8. We clip clean up the land edge of the shapefile by clipping against the land mask.
 
 ## TODO: Stage 4 - v0-4_merge-bathy - Check bathymetry and marine charts for reefs we missed
 In this stage information from bathymetry sources was incorporated into the mapping. The AHO Marine Charts (Australian Hydrographic Office, 2021a, 2021b) and bathymetry datasets were reviewed to identify any reef features that were missed in the previous stages. For Marine Charts peaks and reefs identified in the charts were compared with the mapped reef boundaries. On the marine charts shallows reefs are marked as a hazard or as a peak, showing a depth sounding, with a contour around the peak.
