@@ -19,7 +19,7 @@ Process:
 5. Saves the resulting clipped features to the output shapefile
 
 Input: working/07/NW-Aus-Features-sediment.shp
-Output: 08/NW-Aus-Feature-land-clip.shp
+Output: data/v0-3_qc-1/out/NW-Aus-Features_v0-3.shp
 """
 
 import os
@@ -128,8 +128,8 @@ def main():
     # Define input and output paths
     input_file = 'working/07/NW-Aus-Features-sediment.shp'
     coastline_file = f"{download_path}/AU_AIMS_Coastline_50k_2024/Split/AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_split.shp"
-    output_dir = '08'
-    output_file = f"{output_dir}/NW-Aus-Feature-land-clip.shp"
+    output_dir = 'data/v0-3_qc-1/out'
+    output_file = f"{output_dir}/NW-Aus-Features_v0-3.shp"
     
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
