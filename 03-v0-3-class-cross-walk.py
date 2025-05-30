@@ -3,17 +3,16 @@
 Transform the RB_Type_L3 classification used in 'Reef Boundaries Review.shp' (v0-3_qc-1) 
 to the refactored classification with the new attributes schema.
 
-This script is a one off transformation applied to the data. All future edits
-will be placed in the new generated file. 
+This script is a one off transformation applied to the data. 
+
+Note (v0-4): In v0-4 of the dataset we updated the classification system and so this version
+was only used in this v0-3 version of the dataset. In v0-4 we retained more of RB_Type_L3
+and had less additional attributes. In 09-v0-4-class-cross-walk.py we redo the classification
+starting from the same point as this script, but using the v0-4 classification system.
 
 Usage
 -----
 python 02-v0-3-class-cross-walk.py
-
-Requirements
-------------
-geopandas >= 0.12
-pandas >= 1.0
 """
 
 import geopandas as gpd
