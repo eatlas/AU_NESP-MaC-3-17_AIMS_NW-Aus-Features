@@ -37,7 +37,7 @@ def main():
     print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
     # Input and output paths
-    input_shapefile = "data/v0-3_qc-1/Reef Boundaries Review.shp"
+    input_shapefile = "data/v0-3_qc-1/in/Reef Boundaries Review.shp"
     output_dir = "working/02"
     output_shapefile = os.path.join(output_dir, "Reef_Boundaries_Clean.shp")
     overlap_points_shapefile = os.path.join(output_dir, "Overlap_Points.shp")
