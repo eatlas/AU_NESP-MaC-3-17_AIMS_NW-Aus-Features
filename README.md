@@ -1,4 +1,4 @@
-# North and West Australia Reef Features
+# North and West Australia Reef Features - GIS Dataset
 This repository contains utility scripts that were used in the development of the North and West Australia Reef Features dataset. For full information about this dataset see: 
 
 Lawrey, E., Bycroft, R. (2025). North and West Australia Reef Features - Coral reefs, Rocky reefs, and Intertidal sediment (AIMS). [Data set]. eAtlas. https://doi.org/10.26274/xj4v-2739
