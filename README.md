@@ -14,13 +14,20 @@ This version is intended to flow into the national scale reef dataset (Lawrey & 
 
 Lawrey, E., Bycroft, R. (2025). Australian Tropical Reef Features - Boundaries of coral and rocky reefs (NESP MaC 3.17, AIMS). [Data set]. eAtlas. https://doi.org/10.26274/4rrw-rr88
 
-This version included additional classifications to better represent the limestone reefs around the Pilbra. This version also introduced the `Coral Reef Inner Flat` classification to represent low ecologically active areas on reefs. It also included improvements to the mapping of the paleo rocky reefs off Eighty mile beach, separating out sand banks from the rocky portions.
+This version introduced the following classifications:
+- `Coral Reef Inner Flat` classification to represent low ecologically active areas on reefs.
+- `Limestone reef` and `Sandy Limestone Pavement` to better represent the limestone reefs around the Pilbra. 
+
+This version includes the following improvements:
+- The mapping of the paleo rocky reefs off Eighty mile beach, separating out sand banks from the rocky portions.
+- Review and improvement of the 'Attachment' attribute. This found 6% error rate, with remanent errors estimated at 2%.
+- Significant improvement to the mapping Cocos Keeling Island, Christmas Island, Norfolk Island, Middleton Reef, Elizabeth Reef, and Lord Howe Island.
 
 ### Known issues
 - The `EdgeAcc_m` attribute is a string field when it should be a numeric field. Some features (~5%) do not have their edge accuracy assessed.
 - The `DepthCat` and `DepthCatSr` is not assigned for most features, however most offshore features were assessed to allow their assignment to shallow or deep.
 - Only limited review has been performed on the expert assessment of the `FeatConf` and `TypeConf`.  
-- Many of the small inshore rocky reefs are not included, particularly in the Kimberley area.
+- Many of the small inshore rocky reefs are not included, particularly in the Kimberley area. It was decided to defer the inclusion of the automated intertidal rocky reef mapping as it needs more work.
 - The classification accuracy of the reefs in the Pilbra needs more work. This region has a lot of limestone reefs, with an overlay of active modern coral reefs. The division between coral reefs and limestone reefs has only been partly implemented.
 - The `Coral Reef Inner Flat` has not been fully rolled out to the fringing reefs of Kimberley. As a result most of the fringing reefs only cover the active coral area, not the reef flat. As a result this version underestimates geological extent of the reefs.
 
