@@ -108,9 +108,9 @@ BASE_PATH = config.get('general', 'in_3p_path')
 # This collection was made to act as an example to explain how the validation
 # works. These results are reviewed by all validations and thus are not
 # intended to be used for validation of the dataset.
-RANDOM_SEED = 314
+RANDOM_SEED = 315
 NUM_BATCHES = 1
-FEATURES_PER_REGION = 2
+FEATURES_PER_REGION = 1
 VALIDATORS = ['Examples']  
 
 # This collection is used for the production validation dataset.
@@ -445,7 +445,7 @@ def fuzz_fake_centroid(center, width_m, height_m):
     dy = fuzz_y / 111000
     return Point(center.x + dx, center.y + dy)
 
-def generate_fake_features(num_fake, mask, crs, valid_id_start):
+def generate_fake_features(num_fake, mask, crs, coastline):
     """
     Generate fake features (open water) as dicts for centroids, extents, and boundary errors.
     Returns: (centroids, extents, boundary_errors, fake_centroids_only)
@@ -454,21 +454,17 @@ def generate_fake_features(num_fake, mask, crs, valid_id_start):
     extents = []
     boundary_errors = []
     fake_centroids_only = []
-    valid_id = valid_id_start
-    attempts = 0
+
     for _ in range(num_fake):
         pt = sample_point_in_mask(mask)
         if pt is None:
             continue
         width_m, aspect = random_fake_feature_size()
         height_m = width_m / aspect
-        # Fuzz centroid by 30% of width/height
         fuzzed_centroid = fuzz_fake_centroid(pt, width_m, height_m)
-        # Create bounding box polygon centered at fuzzed centroid
         poly = create_fake_feature_polygon(fuzzed_centroid, width_m, aspect, crs)
-        # Feature-centroid
         centroid_data = {
-            'ValidID': valid_id,
+            'ValidID': None,  # Will assign after shuffle
             'FeatExists': None,
             'FeatConf': None,
             'RB_Type_L3': None,
@@ -478,63 +474,23 @@ def generate_fake_features(num_fake, mask, crs, valid_id_start):
             'fake': True
         }
         centroids.append(centroid_data)
-        fake_centroids_only.append({'ValidID': valid_id, 'geometry': fuzzed_centroid})
-        # Polygon-extent
         extent_data = {
-            'ValidID': valid_id,
+            'ValidID': None,  # Will assign after shuffle
             'geometry': poly
         }
         extents.append(extent_data)
-        # Boundary-error (use same logic as real, but skip coastline check)
-        boundary_pts = generate_boundary_points_fake(poly, crs)
+        boundary_pts = generate_boundary_points(poly, crs, coastline)
         for bpt in boundary_pts:
-            boundary_errors.append({'ValidID': valid_id, 'geometry': bpt})
-        valid_id += 1
-    return centroids, extents, boundary_errors, fake_centroids_only
-
-def generate_boundary_points_fake(polygon, crs):
-    """
-    Generate boundary points for fake features (no coastline check).
-    """
-    boundary = polygon.boundary
-    perimeter = 0
-    if boundary.geom_type == 'LineString':
-        perimeter = boundary.length
-    elif boundary.geom_type == 'MultiLineString':
-        perimeter = sum(line.length for line in boundary.geoms)
-    else:
-        return []
-    if crs.is_geographic:
-        perimeter = perimeter * 111000
-    num_points = SMALL_BOUNDARY_POINTS_PER_FEATURE if perimeter < SMALL_SIZE_THRESHOLD_M else LARGE_BOUNDARY_POINTS_PER_FEATURE
-    if boundary.geom_type == 'LineString':
-        lines = [boundary]
-    elif boundary.geom_type == 'MultiLineString':
-        lines = list(boundary.geoms)
-    else:
-        return []
-    total_length = sum(line.length for line in lines)
-    valid_points = []
-    for _ in range(num_points):
-        pos = random.uniform(0, total_length)
-        current_length = 0
-        point = None
-        for line in lines:
-            if pos <= current_length + line.length:
-                position_on_line = pos - current_length
-                point = line.interpolate(position_on_line)
-                break
-            current_length += line.length
-        if point is not None:
-            valid_points.append(point)
-    return valid_points
+            boundary_errors.append({
+                'ValidID': None, 
+                'EdgeAcc_m': None,  # Placeholder for edge accuracy
+                'geometry': bpt
+            })  # Will assign after shuffle
+    return centroids, extents, boundary_errors
 
 def create_batch_datasets(features_by_region, batch_num, used_features_indices, coastline, fake_location_mask, crs):
     """Create the three validation datasets for a batch, including fake features."""
     print(f"Creating validation datasets for batch {batch_num}...")
-    fake_centroids_only = []
-
-    valid_id = 1  # Start ID at 1
 
     # Collect real features
     real_centroids = []
@@ -556,8 +512,12 @@ def create_batch_datasets(features_by_region, batch_num, used_features_indices, 
         used_features_indices[region_id].update(selected_indices)
         for _, feature in selected_features.iterrows():
             inside_point = ensure_centroid_inside(feature.geometry)
+
+            #print the inside point position for debugging
+            # print(f"Inside point for feature in region {region_id}: {inside_point.x}, {inside_point.y}")
+
             centroid_data = {
-                'ValidID': valid_id,
+                'ValidID': None,  # Will assign after shuffling
                 'FeatExists': None,
                 'FeatConf': None,
                 'RB_Type_L3': None,
@@ -569,39 +529,69 @@ def create_batch_datasets(features_by_region, batch_num, used_features_indices, 
             real_centroids.append(centroid_data)
             simplified_fuzzed = simplify_and_fuzz_polygon(feature.geometry, features.crs)
             extent_data = {
-                'ValidID': valid_id,
+                'ValidID': None,  # Will assign after shuffling
                 'geometry': simplified_fuzzed
             }
             real_extents.append(extent_data)
             boundary_points = generate_boundary_points(simplified_fuzzed, features.crs, coastline)
             for point in boundary_points:
                 boundary_data = {
-                    'ValidID': valid_id,
+                    'ValidID': None,  # Will assign after shuffling
+                    'EdgeAcc_m': None,  # Placeholder for edge accuracy
                     'geometry': point
                 }
                 real_boundary_errors.append(boundary_data)
-            valid_id += 1
+            # valid_id += 1  # Remove this, will assign after shuffle
 
     num_real = len(real_centroids)
     num_fake = int(np.round(FAKE_FEATURE_PROPORTION * num_real / (1 - FAKE_FEATURE_PROPORTION)))
     print(f"Generating {num_fake} fake features for {num_real} real features (proportion {FAKE_FEATURE_PROPORTION:.2f})")
-    fake_centroids, fake_extents, fake_boundary_errors, fake_centroids_only = generate_fake_features(num_fake, fake_location_mask, crs, valid_id)
+    # Generate fake features with placeholder ValidID=None
+    fake_centroids, fake_extents, fake_boundary_errors = generate_fake_features(
+        num_fake, fake_location_mask, crs, coastline
+    )
 
+    # Combine and shuffle while keeping alignment
     all_centroids = real_centroids + fake_centroids
     all_extents = real_extents + fake_extents
     all_boundary_errors = real_boundary_errors + fake_boundary_errors
-
-    # Combine and shuffle while keeping alignment
     combined = list(zip(all_centroids, all_extents, all_boundary_errors))
     random.shuffle(combined)
     all_centroids, all_extents, all_boundary_errors = zip(*combined) if combined else ([], [], [])
+
+    # Assign sequential ValidIDs after shuffle
+    for idx, (centroid, extent, boundary) in enumerate(zip(all_centroids, all_extents, all_boundary_errors), 1):
+        centroid['ValidID'] = idx
+        extent['ValidID'] = idx
+        boundary['ValidID'] = idx  # Note: if multiple boundary points per feature, this only sets the first; fix below
+
+    # Fix ValidID for all boundary errors (since there may be multiple per feature)
+    # Build a mapping from geometry to ValidID for centroids
+    centroid_geom_to_validid = {id(centroid['geometry']): centroid['ValidID'] for centroid in all_centroids}
+    # For each boundary error, assign ValidID based on the corresponding centroid's geometry object
+    for boundary in all_boundary_errors:
+        # Find the matching centroid by geometry object id
+        # This assumes the boundary error comes from the same feature as the centroid in the zipped list
+        # If not, fallback to sequential assignment
+        if boundary['ValidID'] is None:
+            # Try to find matching centroid by geometry object id
+            # (This works because the zipped lists are aligned)
+            idx = all_boundary_errors.index(boundary)
+            if idx < len(all_centroids):
+                boundary['ValidID'] = all_centroids[idx]['ValidID']
+
+    # Update fake_centroids_only ValidIDs to match shuffled centroids
+    fake_centroids_gdf = []
+    for centroid in all_centroids:
+        if centroid.get('fake'):
+            fake_centroids_gdf.append({'ValidID': centroid['ValidID'], 'geometry': centroid['geometry']})
 
     # Convert to GeoDataFrames
     feature_centroids_gdf = gpd.GeoDataFrame(list(all_centroids), crs=crs)
     feature_centroids_gdf = feature_centroids_gdf[['ValidID', 'FeatExists', 'FeatConf', 'RB_Type_L3', 'TypeConf', 'Attachment', 'geometry', 'fake']]
     polygon_extents_gdf = gpd.GeoDataFrame(list(all_extents), crs=crs)
     boundary_errors_gdf = gpd.GeoDataFrame(list(all_boundary_errors), crs=crs)
-    fake_centroids_gdf = gpd.GeoDataFrame(fake_centroids_only, crs=crs)[['ValidID', 'geometry']]
+    fake_centroids_gdf = gpd.GeoDataFrame(fake_centroids_gdf, crs=crs)[['ValidID', 'geometry']]
 
     return feature_centroids_gdf, polygon_extents_gdf, boundary_errors_gdf, fake_centroids_gdf
 
