@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """
+This script is not yet used. 
+
 Script Name: 07d-compare-reef-masks.py
 
 Description:

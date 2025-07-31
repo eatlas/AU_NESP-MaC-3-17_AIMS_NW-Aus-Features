@@ -2,7 +2,10 @@ from data_downloader import DataDownloader
 import os
 """
 This script downloads additional data files used for performing QAQC on the shallow masks.
-python 07a-download-qaqc-data.py
+
+This script is not yet used.
+
+python 20a-download-qaqc-data.py
 """
 DOWNLOAD_PATH = "data/in-3p"
 # Create an instance of the DataDownloader class
