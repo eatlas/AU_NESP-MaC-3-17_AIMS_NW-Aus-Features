@@ -14,9 +14,14 @@ operation using a high-resolution coastline dataset.
 Process:
 1. Loads the reef features from the input shapefile
 2. Loads the coastline shapefile
-3. Clips all reef geometries against the coastline (using geometry.difference)
-4. Removes any features that become empty after clipping (i.e., were entirely on land)
-5. Saves the resulting clipped features to the output shapefile
+3. Performs a series of geometry checks on the input and coastline data:
+   - Checks for empty or null geometries
+   - Checks for invalid geometries (e.g., self-intersections)
+   - Checks for non-polygon geometries
+   - Reports and saves problematic features for manual inspection
+4. Clips all reef geometries against the coastline (using geometry.difference)
+5. Removes any features that become empty after clipping (i.e., were entirely on land)
+6. Saves the resulting clipped features to the output shapefile
 """
 
 import os
@@ -24,8 +29,17 @@ import time
 import configparser
 import geopandas as gpd
 from tqdm import tqdm
-from shapely.validation import make_valid
+from shapely.validation import make_valid, explain_validity
 import sys
+
+# ---- PATH CONSTANTS ----
+OUTPUT_DIR = 'working/10'
+INPUT_FILE = 'data/v0-4/in/Reef-Boundaries_v0-4_edit.shp'
+OUTPUT_FILE = f"{OUTPUT_DIR}/NW-Aus-Features_v0-4.shp"
+NONPOLY_INPUT_FILE = f"{OUTPUT_DIR}/NW-Aus-Features_v0-4_input_nonpolygons.shp"
+NONPOLY_CLIPPED_FILE = f"{OUTPUT_DIR}/NW-Aus-Features_v0-4_clipped_nonpolygons.shp"
+INVALID_GEOM_PATH = f"{OUTPUT_DIR}/NW-Aus-Features_v0-4_input_invalid.shp"
+# coastline_file is built in main as it depends on config
 
 def apply_coastline_clipping(gdf, coastline_file):
     """
@@ -55,15 +69,39 @@ def apply_coastline_clipping(gdf, coastline_file):
         print(f"Converting coastline from {coastline_gdf.crs} to EPSG:4326")
         coastline_gdf = coastline_gdf.to_crs(epsg=4326)
     
-    # Validate coastline geometries
-    print("Validating coastline geometries...")
-    invalid_coast_count = 0
-    for i, geom in enumerate(coastline_gdf.geometry):
-        if not geom.is_valid:
-            coastline_gdf.loc[i, 'geometry'] = make_valid(geom)
-            invalid_coast_count += 1
-    print(f"Fixed {invalid_coast_count} invalid coastline geometries")
-    
+    # Fail fast: check for empty geometries in input
+    empty_input = gdf[gdf.geometry.is_empty | gdf.geometry.isna()]
+    if not empty_input.empty:
+        raise ValueError(f"Input GeoDataFrame contains {len(empty_input)} empty or null geometries. Please fix before proceeding.")
+
+    # Fail fast: check for invalid geometries in input
+    invalid_input = gdf[~gdf.geometry.is_valid]
+    if not invalid_input.empty:
+        print(f"Saving {len(invalid_input)} invalid input geometries to {INVALID_GEOM_PATH}")
+        os.makedirs(os.path.dirname(INVALID_GEOM_PATH), exist_ok=True)
+        invalid_input.to_file(INVALID_GEOM_PATH)
+        # Print details about invalid geometries
+        print("Details of invalid geometries:")
+        for idx, row in invalid_input.iterrows():
+            reason = explain_validity(row.geometry)
+            print(f"Feature index {idx}: {reason}")
+        raise ValueError(f"Input GeoDataFrame contains {len(invalid_input)} invalid geometries. Saved to {INVALID_GEOM_PATH}. Please fix before proceeding.")
+    # Fail fast: check for non-polygon geometries in input
+    from shapely.geometry import Polygon, MultiPolygon
+    nonpoly_input = gdf[~gdf.geometry.apply(lambda g: isinstance(g, (Polygon, MultiPolygon)))]
+    if not nonpoly_input.empty:
+        raise ValueError(f"Input GeoDataFrame contains {len(nonpoly_input)} non-polygon geometries. Please fix before proceeding.")
+
+    # After CRS conversion, check for invalid geometries in coastline
+    invalid_coast = coastline_gdf[~coastline_gdf.geometry.is_valid]
+    if not invalid_coast.empty:
+        raise ValueError(f"Coastline GeoDataFrame contains {len(invalid_coast)} invalid geometries after CRS conversion. Please fix before proceeding.")
+
+    # Fail fast: check for non-polygon geometries in coastline
+    nonpoly_coast = coastline_gdf[~coastline_gdf.geometry.apply(lambda g: isinstance(g, (Polygon, MultiPolygon)))]
+    if not nonpoly_coast.empty:
+        raise ValueError(f"Coastline GeoDataFrame contains {len(nonpoly_coast)} non-polygon geometries. Please fix before proceeding.")
+
     # Clip the reef features against the coastline
     print(f"Clipping {len(gdf)} reef features against the coastline...")
     
@@ -71,6 +109,11 @@ def apply_coastline_clipping(gdf, coastline_file):
     print("Creating coastline union for clipping (this may take a while)...")
     coast_start_time = time.time()
     coastline_union = coastline_gdf.union_all()
+    # Fail fast: check for empty or invalid union
+    if coastline_union.is_empty:
+        raise RuntimeError("Coastline union geometry is empty. Aborting.")
+    if not coastline_union.is_valid:
+        raise RuntimeError("Coastline union geometry is invalid. Aborting.")
     print(f"Coastline union created in {time.time() - coast_start_time:.2f} seconds")
     
     # Function to clip a geometry against the coastline
@@ -141,6 +184,11 @@ def check_file_locked(filepath):
         # We don't consider these as locks, but as other potential issues
         return False
 
+def is_polygon(geom):
+    """Return True if geometry is Polygon or MultiPolygon."""
+    from shapely.geometry import Polygon, MultiPolygon
+    return geom is not None and (isinstance(geom, Polygon) or isinstance(geom, MultiPolygon))
+
 def main():
     # Start timing
     start_time = time.time()
@@ -150,37 +198,52 @@ def main():
     config = configparser.ConfigParser()
     config.read('config.ini')
     download_path = config.get('general', 'in_3p_path')
-    
-    # Define input and output paths
-    input_file = 'data/v0-4/in/Reef-Boundaries_v0-4_edit.shp'
     coastline_file = f"{download_path}/AU_AIMS_Coastline_50k_2024/Split/AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_split.shp"
-    output_dir = 'data/v0-4/out'
-    output_file = f"{output_dir}/NW-Aus-Features_v0-4.shp"
-    
+
     # Check if output file is locked
-    if check_file_locked(output_file):
-        print(f"ERROR: Output file '{output_file}' is currently open or locked by another process. Please close it and try again.")
+    if check_file_locked(OUTPUT_FILE):
+        print(f"ERROR: Output file '{OUTPUT_FILE}' is currently open or locked by another process. Please close it and try again.")
         sys.exit(1)
         
     # Create output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     
     # Read the input shapefile
-    print(f"Reading input shapefile: {input_file}")
-    gdf = gpd.read_file(input_file)
+    print(f"Reading input shapefile: {INPUT_FILE}")
+    gdf = gpd.read_file(INPUT_FILE)
     print(f"Input CRS: {gdf.crs}")
     print(f"Loaded {len(gdf)} features")
+    
+    # --- Check for non-polygon geometries in input ---
+    from shapely.geometry import Polygon, MultiPolygon
+    nonpoly_input = gdf[~gdf.geometry.apply(lambda g: is_polygon(g))]
+    if not nonpoly_input.empty:
+        print(f"WARNING: {len(nonpoly_input)} non-polygon geometries found in input. Saving to {NONPOLY_INPUT_FILE}")
+        nonpoly_input.to_file(NONPOLY_INPUT_FILE)
+    else:
+        print("All input features are polygons or multipolygons.")
+    gdf = gdf[gdf.geometry.apply(lambda g: is_polygon(g))]
     
     # Apply coastline clipping
     clipped_gdf = apply_coastline_clipping(gdf, coastline_file)
     
-    # Save the result
-    print(f"Saving clipped features to: {output_file}")
-    clipped_gdf.to_file(output_file)
+    # --- After clipping: separate polygons and non-polygons ---
+    is_poly_mask = clipped_gdf.geometry.apply(lambda g: is_polygon(g))
+    polygons_gdf = clipped_gdf[is_poly_mask]
+    nonpoly_clipped = clipped_gdf[~is_poly_mask]
+    
+    print(f"Saving {len(polygons_gdf)} polygon features to: {OUTPUT_FILE}")
+    polygons_gdf.to_file(OUTPUT_FILE)
+    
+    if not nonpoly_clipped.empty:
+        print(f"WARNING: {len(nonpoly_clipped)} non-polygon geometries after clipping. Saving to {NONPOLY_CLIPPED_FILE}")
+        nonpoly_clipped.to_file(NONPOLY_CLIPPED_FILE)
+    else:
+        print("All clipped features are polygons or multipolygons.")
     
     # Report time taken
     print(f"Process completed in {time.time() - start_time:.2f} seconds")
-    print(f"Output saved to {output_file}")
+    print(f"Output saved to {OUTPUT_FILE}")
 
 if __name__ == "__main__":
     main()
