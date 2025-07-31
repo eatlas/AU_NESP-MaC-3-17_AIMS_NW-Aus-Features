@@ -1,7 +1,7 @@
 # Map stage notes
 The following is a set of notes detailing the processing that was applied in the development of each phase of the mapping. This phased approach provides a record of what features were detected and mapped at each stage of the project, where each stage represents the incorporation of new information.
 
-# Stage 4 - v0-4 - 2025-05-30
+# Stage 4 - v0-4 - 2025-07-30
 In stage 3 the focus of the scripts was to merge all the datasets (sediment, automated intertidal rocky reefs, manual reef boundaries) into a final dataset where features don't have any overlaps. My original plan was to use this new output as the basis for further improvements in this stage. However, manual editing of this final dataset is difficult and we determined that there were issues with the clipping around the intertidal rocky reef that should be reprocessed. We therefore shifted to maintaining a set of editable layers that are then combined to create the final dataset. These editable layers are based on the original inputs to the stage 3 scripts, but with some of the corrections applied to them, prior to the next stage of manual editing. The editing layers will remain separate in the order top to bottom:
 - Coastline - Coast 50K 2025
 - Intertidal rocky reefs - Derived from AU_NESP-MaC-3-17_AIMS_Rocky-reefs
@@ -20,6 +20,8 @@ Significant improvements were made to all of the offshore islands and reefs (i.e
 
 A review of the 'Attachment' attribute was conducted and 558 corrections were made of 8753 features. This indicates an error rate of approximately 6.4%. There are likely still errors of 1-2% relating to difficult cases and additional cases that were missed, as the review was done fairly quickly. The 'Attachment' attribute is one that has never been previously reviewed or checked. A further automated check could be performed by looking for features that are touched by a buffered version of the coastline.
 
+Improvements were made to many of the rocky coastlines and sand banks of the Pilbra. Coral Inner Flat areas were added to reefs on the Cobourg Peninsula (NT) and sand banks were added to the Van Diemen Gulf. The boundaries of the small isolated reefs in the Gulf of Carpentaria were reviewed and adjusted, and 4 new small reefs identified. 
+
 ## Rocky reef handling
 Version v0-4 is intended to be a draft for the national scale NVCL dataset. This dataset has 250 m pixels and so small intertidal rocky reefs will not contribute much to the result. The intertidal rocky reef mapping needs additional work to get the dataset to work at the national scale accurately. We therefore focus on the NW-Aus-Features dataset focusing on subtidal rocky reef mapping. The intertidal rockys reefs can then be spliced in at the national scale. 
 
@@ -28,8 +30,68 @@ The same applied to the shallow sediment classification. The previous shallow se
 
 
 ## Reef boundaries
-This layer contains the manually edited reef boundaries from v0-2. This version overlap issues that are corrected by `02-clean-overlaps.py`. We therefore pick this corrected version from `working/02/Reef_Boundaries_Clean.shp` then apply a cross walk of the attributes to bring them inline with the v0-4 classification scheme. The script saves the output to `working/09/Reef-Boundaries_v0-4_edit.shp`, which is then copied manually to `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp` as the shapefile for manual editing and improvement.
+This layer contains an improved version of the the manually edited reef boundaries from v0-2. All overlap issues have been resolved.  We therefore pick this corrected version from `working/02/Reef_Boundaries_Clean.shp` then appled a cross walk of the attributes to bring them inline with the v0-4 classification scheme. The editable version of this dataset is `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp`. The output version of the dataset has the land clipped from the features using `10-v0-4-clip-land.py`. This saved the output to `data/v0-4/out/NW-Aus-Features_v0-4.shp`.
 
+No rigorous time tracking was applied to the improvements being made, however the following are approximate total digitisation time:
+v0-1 RB - 500 hours
+v0-1 EL - 87 hours
+v0-2 - (+50) 550 hours
+v0-3 - (+80) 630 hours
+v0-4 - (+77) 707 hours (up to 29/7/2025) 13,795 kB 10390 features 7624 depths 2896 rocky reefs
+
+
+
+### Manual edit improvements
+Added Non-reef Bank classification. Refined the boundary of reefs around Adele Island, Lacepede Islands and Baleine Bank. Changed the Coral Reef Inner Flat to just Coral Reef Flat so that it better represent sediment areas on reefs, such as Lacepede Islands reef, which can occur on the outside of the coral reef areas. Lacepede and Baleine Bank are still not that well represented. It is unclear whether the bank covered in sediment that is largely terrestiral in origin. Is this simply an area that is shallow, and a portion of it (Lacepede) formed a shallow reef. 
+
+From v0-3 there were over 400 features that did not have an estimate for the `EdgeAcc_m`. Manual edits were focused fixing digitisation errors and depth estimates of features around the features missing the EdgeAcc_m. Typically 5-10 features were improved for every feature missing the `EdgeAcc_m`. 
+
+A significant percentage time was spent improving the boundary accuracy and coverage of sand banks.
+
+The outlines of the stromatolite reefs in Shark bay were refined to focus on areas where there are some verictal structure. This included excluding areas that were likely to just be microbial pavement (see https://doi.org/10.1016/j.margeo.2012.02.009).
+
+Some additional work was done to improve the coverage of rocky reefs and coral reef flats in the Kimberley region. While significant corrections were made it is far from complete. There is likely to be at least 1000 additional corrections on rocky reefs in this region.
+
+## Partial edit log
+This log is to help track the rate of improvements to the datasets over time. A various stages the total time is incorporated into the running total and these details removed.
+
+21/7/2025 8:54 - 10:28 1 hr 30 min 13,167 kB 9669 features 0 Edge 2702 depth
+
+21/7/2025 4:19 - 5:21 1 hr  13,198 kB 9720 features 0 Edge 
+5:22 - 6:22 1 hr 13,234 kB 9767 features 
+
+23/7/2025
+2 hr 13,314 kB 9824 features 3226 depth 448 not matched
+12:06 - 1:01 55 min 9854 features 3311 depth 409 not match
+2:00 - 3:00 1hr 9907 features 3370 depth 406 not match
+3:04 - 4:14 1 hr 10 min 9926 3746 depth 403 not match
+52 min 13,409kB 9936 features 3766 depth 312 not match 
+3 hr 45 min 13,478kB 10024 features 4047 depths 153 not match
+1 hr 18 min 13524 kB 10110 features 4139 depths 148 not match
+2 hr 13611 kB 10192 features 4290 depths 104 not match
+1 hr 4 min 13673 kB 10274 features 4372 depths 96 not match 2832 rocky reefs
+1 hr 13721 kB 10343 features 4473 depths 85 not match 2860 rocky reefs
+
+27/7/2025
+1 hr 30 min 10377 features 4525 depths 75 not match 2880 rocky reefs
+2 hr 15 min 10387 features 4773 depths 41 not match 2890 rocky reefs
+1 hr 19 min 10397 features 4970 depths 0 not match 2899 rocky reefs
+33 min 10391 13,791kB features 5300 depths 2893 rocky reefs
+44 min 5721 depths
+
+29/7/2025
+1 hr 37 min 13,796 kB 10397 features 6674 depths 2899 rocky reefs
+1 hr 50 min 13,795 kB 10390 features 7624 depths 2896 rocky reefs
+
+### Known Limitations
+Many of the Coral Reef Flats for the inshore fringing reefs have not yet been added to the dataset. This means that the area of the inshore reefs is substantially more than that indicated by this version of the dataset. It also means that there are likely to be less, but larger reefs, as the Coral Reef Flat regions will tie together coral reef areas.
+
+There are many inshore rocky reefs that have not been added to the data. These rocky reefs are often the landward side of narrow fringing coral reefs. This leads to the size of some of these fringing coral reefs from being over estimated and an underestimate in the number of inshore rocky reefs. It is difficult to determine the true number of rocky reefs, but there are probably 1000 more rocky reefs that are less than 50 m across (land to ocean) that are not mapped. 
+Rocky reefs include boulder reefs, not just bed rock.   
+
+Only 64% of the features have had their depth estimated, and most of these estimates were a relatively quick initial assessment. Issues with the assessment occurred for fringing coral reefs where the landward side of the reef had not been carefully digitised, or there were small rocky reefs in the reef that were not digitised. These would often result in intertidal areas corresponding to the land or rocks that are not representative of the main feature being digitised. In some cases these overlaps were corrected and the feature split into coral reef and rocky reef. However due to time limitations there are at least 1000 cases where this editing was not completed. 
+
+There are still many sand banks that are not digitised. While the number of mapped sand banks increased from 390 in v0-3 to 810 in v0-4 there are still hundreds not yet digitised. 
 
 ## Stage 3 - v0-3_qc-1 - Quality control - 2025-04-24 - Habitat Map boundaries
 The goal of this version was to prepare the dataset to be used by the UQ team as contraints on the automated habitat mapping. UQ planned to use coral reefs, rocky reefs and sediment classifications to drive independent habitat classification models. While this version of the dataset contained many improvements over the previous version it still contains many known small issues that were unresolved. This was due to the limited time available to clean up the dataset.
