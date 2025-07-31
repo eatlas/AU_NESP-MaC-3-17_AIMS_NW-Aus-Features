@@ -66,7 +66,8 @@ def crosswalk_classification():
     """
     # Define input and output paths
     input_shapefile = "working/02/Reef_Boundaries_Clean.shp"
-    lookup_table = "data/v0-4/in/RB_Type_L3_v0-3_to_v0-4_crosswalk.csv"
+    #lookup_table = "data/v0-4/in/RB_Type_L3_v0-3_to_v0-4_crosswalk.csv"
+    lookup_table = "data/v0-4/in/RB_Type_L3_crosswalk.csv"
 
     # Save to the working output so we don't accidentally overwrite 
     # Any post manual edits to the v0-4 data
@@ -139,7 +140,7 @@ def crosswalk_classification():
     if 'RB_Type_L3_v0-4' not in crosswalk_df.columns:
         raise ValueError(f"Crosswalk table missing 'RB_Type_L3_v0-4' column")
         
-    if 'Attachment' not in crosswalk_df.columns:
+    if 'Attachment_v0-4' not in crosswalk_df.columns:
         raise ValueError(f"Crosswalk table missing 'Attachment' column")
 
     # Check for duplicate mappings in the lookup table
@@ -150,6 +151,7 @@ def crosswalk_classification():
 
     # Rename the column in crosswalk_df to match the column in features_gdf for merging
     crosswalk_df = crosswalk_df.rename(columns={'RB_Type_L3_v0-3': 'RB_Type_L3'})
+    crosswalk_df = crosswalk_df.rename(columns={'Attachment_v0-4': 'Attachment'})
 
     # Count the frequency of each RB_Type_L3 value in the input data
     value_counts = features_gdf['RB_Type_L3'].value_counts()
