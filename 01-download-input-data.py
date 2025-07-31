@@ -15,6 +15,8 @@ print("Downloading source data files. This will take a while ...")
 
 # --------------------------------------------------------
 #Lawrey, E. P., Stewart M. (2016) Complete Great Barrier Reef (GBR) Reef and Island Feature boundaries including Torres Strait (NESP TWQ 3.13, AIMS, TSRA, GBRMPA) [Dataset]. Australian Institute of Marine Science (AIMS), Torres Strait Regional Authority (TSRA), Great Barrier Reef Marine Park Authority [producer]. eAtlas Repository [distributor]. https://eatlas.org.au/data/uuid/d2396b2c-68d4-4f4b-aab0-52f7bc4a81f5
+# This was needed to determine the potential overlap point between the existing Torres Strait reef mapping
+# and the new mapping in the Gulf of Carpentaria.
 direct_download_url = 'https://nextcloud.eatlas.org.au/s/xQ8neGxxCbgWGSd/download/TS_AIMS_NESP_Torres_Strait_Features_V1b_with_GBR_Features.zip'
 downloader.download_and_unzip(direct_download_url, 'GBR_AIMS_Complete-GBR-feat_V1b')
 
@@ -34,10 +36,13 @@ downloader.download_and_unzip(direct_download_url, 'GBR_AIMS_Complete-GBR-feat_V
 # Australian Coastline 50K 2024 (NESP MaC 3.17, AIMS)
 # https://eatlas.org.au/geonetwork/srv/eng/catalog.search#/metadata/c5438e91-20bf-4253-a006-9e9600981c5f
 # Hammerton, M., & Lawrey, E. (2024). Australian Coastline 50K 2024 (NESP MaC 3.17, AIMS) (2nd Ed.) [Data set]. eAtlas. https://doi.org/10.26274/qfy8-hj59
+# This is used for clipping out land areas from the manually edited reef boundaries
 direct_download_url = 'https://nextcloud.eatlas.org.au/s/DcGmpS3F5KZjgAG/download?path=%2FV1-1%2F&files=Split'
+
 downloader.download_and_unzip(direct_download_url, 'AU_AIMS_Coastline_50k_2024', subfolder_name='Split', flatten_directory=True)
 
-# Use this version for overview maps
+# Use this version for overview maps and faster intermediate processing steps where the finest
+# precision is not needed.
 direct_download_url = 'https://nextcloud.eatlas.org.au/s/DcGmpS3F5KZjgAG/download?path=%2FV1-1%2F&files=Simp'
 downloader.download_and_unzip(direct_download_url, 'AU_AIMS_Coastline_50k_2024', subfolder_name='Simp', flatten_directory=True)
 
@@ -55,6 +60,7 @@ downloader.download_and_unzip(direct_download_url, 'AU_DCCEEW_Australia-Marine-P
 # Includes contributions from IMaRS-USF and IRD (2005), IMaRS-USF (2005) and Spalding et al. (2001). 
 # Cambridge (UK): UN Environment World Conservation Monitoring Centre. Data DOI: https://doi.org/10.34892/t2wk-5t34
 #subfolder_name='14_001_WCMC008_CoralReefs2021_v4_1'
+# This dataset was used for creating comparative maps for the NESP showcase presentation.
 direct_download_url = 'https://datadownload-production.s3.us-east-1.amazonaws.com/WCMC008_CoralReefs2021_v4_1.zip'
 downloader.download_and_unzip(direct_download_url, 'World_WCMC_CoralReefs2021_v4_1', flatten_directory=True)
 
@@ -78,14 +84,22 @@ downloader.download_and_unzip(direct_download_url, 'World_WCMC_CoralReefs2021_v4
 #downloader.download(direct_download_url, 'AU_ICSM_Gazetteer_2018')
 
 # Lawrey, E. (2025) Semi-automated Shallow Marine Mask for Northern Australia and GBR Derived from Sentinel-2 Imagery (NESP MaC 3.17, AIMS) (Version 1-1) [Data set]. eAtlas. https://doi.org/10.26274/x37r-xk75
+# This is used for creating the v0-3 shallow sediment mask used for the UQ habitat mapping
 direct_download_url = f'https://nextcloud.eatlas.org.au/s/iMrFB9WP9EpLPC2/download?path=%2FV1-1%2Fout%2Flow'
 downloader.download_and_unzip(direct_download_url, 'AU_AIMS_Shallow-mask', flatten_directory = True)
 
 # Lawrey, E. (2025) Semi-automated Shallow Intertidal Rocky Reefs of Northern Australia (NESP MaC 3.17, AIMS) (Version 1)
 # https://nextcloud.eatlas.org.au/apps/sharealias/a/AU_NESP-MaC-3-17_AIMS_Rocky-reefs
 # https://github.com/eatlas/AU_NESP-MaC-3-17_AIMS_Rocky-reefs
+# This is used for creating the v0-3 shallow sediment mask used for the UQ habitat mapping
 direct_download_url = f'https://nextcloud.eatlas.org.au/s/QD84aRGoKYs3KtP/download?path=%2FV1%2Fout'
 downloader.download_and_unzip(direct_download_url, 'AU_AIMS_Rocky-reefs', flatten_directory = True)
+
+# Alcock, M.B.,Taffs, N.J., Zhong, Q. (2020) Seas and Submerged Lands Act 1973 - Australian Maritime Boundaries 2020 - Geodatabase. Geoscience Australia. https://pid.geoscience.gov.au/dataset/ga/144571
+# This eas used to produce maps showing which reefs on the north west shelf as in Australian waters.
+direct_download_url = 'https://d28rz98at9flks.cloudfront.net/144571/144571_01_0.zip'
+downloader.download_and_unzip(direct_download_url, 'AU_GA_AMB2020', flatten_directory = True)
+
 
 
 
