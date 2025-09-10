@@ -2,15 +2,10 @@
 The following is a set of notes detailing the processing that was applied in the development of each phase of the mapping. This phased approach provides a record of what features were detected and mapped at each stage of the project, where each stage represents the incorporation of new information.
 
 # Stage 4 - v0-4 - 2025-07-30
-In stage 3 the focus of the scripts was to merge all the datasets (sediment, automated intertidal rocky reefs, manual reef boundaries) into a final dataset where features don't have any overlaps. My original plan was to use this new output as the basis for further improvements in this stage. However, manual editing of this final dataset is difficult and we determined that there were issues with the clipping around the intertidal rocky reef that should be reprocessed. We therefore shifted to maintaining a set of editable layers that are then combined to create the final dataset. These editable layers are based on the original inputs to the stage 3 scripts, but with some of the corrections applied to them, prior to the next stage of manual editing. The editing layers will remain separate in the order top to bottom:
-- Coastline - Coast 50K 2025
-- Intertidal rocky reefs - Derived from AU_NESP-MaC-3-17_AIMS_Rocky-reefs
-- Reef boundaries - Coral reefs, sand banks and subtidal rocky reefs - Derived from the manual mapping
-- Shallow sediment - Derived from AU_NESP-MaC-3-17_AIMS_Shallow-mask
-The final dataset is created by each layer above clipping and overriding the layers below.
+In stage 3 the focus of the scripts was to merge all the datasets (sediment, automated intertidal rocky reefs, manual reef boundaries) into a final dataset where features don't have any overlaps. My original plan was to use this new output as the basis for further improvements in this stage. However, manual editing of this final dataset is difficult and we determined that there were issues with the clipping around the intertidal rocky reef that should be reprocessed. We therefore shifted to maintaining a set of editable layers that are then combined to create the final dataset. These editable layers are based on the original inputs to the stage 3 scripts, but with some of the corrections applied to them, prior to the next stage of manual editing. 
 
 ## Improvements
-In this stage we made improvements to the boundary accuracy and separation of Paleo Rocky Reef from Sand Banks in Eighty miles beach. Only the northern most 250 km was improved due to time limitations. Many northern features were previously classified as Paleo Rocky Reefs. These were switched to Sand Banks due to the lack of visual evidence that there was exposed rock.
+In this stage we made improvements to the boundary accuracy and separation of Paleo Rocky Reef from Sand Banks in Eighty miles beach. Many northern features were previously classified as Paleo Rocky Reefs. These were switched to Sand Banks due to the lack of visual evidence that there was exposed rock.
 
 Many 'High Intertidal Coral Reefs' were reclassified as 'High Intertidal Sediment Reefs' as they had no evidence of a hard substrate. These appear to form a continuum between these two classifications.
 
@@ -18,7 +13,7 @@ A partial reworking of the Barrow Island Shoals and reef areas around Montebello
 
 Significant improvements were made to all of the offshore islands and reefs (i.e. Cocos Keeling Island, Christmas Island, Norfolk Island, Middleton Reef, Elizabeth Reef, Lord Howe Island), however these areas need considerable additional time and consideration to map these features well. The satellite imagery in these areas is generally poor due to the low number of image that were available to incorporate into the composite images and the relatively low depth visibility of the imagery due to dissolved organics in the water. These areas should be considered as draft quality.
 
-A review of the 'Attachment' attribute was conducted and 558 corrections were made of 8753 features. This indicates an error rate of approximately 6.4%. There are likely still errors of 1-2% relating to difficult cases and additional cases that were missed, as the review was done fairly quickly. The 'Attachment' attribute is one that has never been previously reviewed or checked. A further automated check could be performed by looking for features that are touched by a buffered version of the coastline.
+A review of the 'Attachment' attribute was conducted and 558 corrections were made of 8753 features (this was about half way through the development of v0-4). This indicates an error rate of approximately 6.4%. There are likely still errors of 1-2% relating to difficult cases and additional cases that were missed, as the review was done fairly quickly. The 'Attachment' attribute is one that has never been previously reviewed or checked. A further automated check could be performed by looking for features that are touched by a buffered version of the coastline.
 
 Improvements were made to many of the rocky coastlines and sand banks of the Pilbra. Coral Inner Flat areas were added to reefs on the Cobourg Peninsula (NT) and sand banks were added to the Van Diemen Gulf. The boundaries of the small isolated reefs in the Gulf of Carpentaria were reviewed and adjusted, and 4 new small reefs identified. 
 
@@ -29,15 +24,19 @@ Version v0-4 is intended to be a draft for the national scale NVCL dataset. This
 The same applied to the shallow sediment classification. The previous shallow sediment class that was added to version v0-3 was developed for the purpose of assisting the UQ habitat mapping, however its definition does not align accurately with the NVCL. Currently, it includes areas much deeper than the intertidal zone, while the NVCL needs the intertidal zone. We therefore publish v0-4 focusing on the reefs and don't include the shallow sediment. We would therefore defer adding in the intertidal sediment at the national scale (covering the GBR as well).
 
 
-## Reef boundaries
-This layer contains an improved version of the the manually edited reef boundaries from v0-2. All overlap issues have been resolved.  We therefore pick this corrected version from `working/02/Reef_Boundaries_Clean.shp` then appled a cross walk of the attributes to bring them inline with the v0-4 classification scheme. The editable version of this dataset is `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp`. The output version of the dataset has the land clipped from the features using `10-v0-4-clip-land.py`. This saved the output to `data/v0-4/out/NW-Aus-Features_v0-4.shp`.
+## Reef boundaries workflow
+v0-4 of the reef boundaries starts from the editable version from v0-3. This is not the output `v0-3_qc-1\out\NW-Aus-Features_v0-3.shp` shapefile because this version is the final dataset that has had all its features clipped to the coastline. v0-3 was the version developed for the habitat mapping mask and it contains the merging with the shallow sediment. We roll back these modifications in v0-4 to focus on the reef boundaries and sand banks. We start with `v0-3_qc-1\in\NW-Features_RB_Type_L3\Reef Boundaries Review.shp`. This version still has some unresolved overlaps in features and so we clean up the data with `02-clean-overlaps.py`. This is effectively performing the first set of v0-3. This produces `working\02\Reef_Boundaries_Clean.shp`. We then apply a cross walk of the attributes to bring them inline with the v0-4 classification scheme with the `09-v0-4-class-cross-walk.py`. This produces `working/09/Reef-Boundaries_v0-4.shp`, which we manually copy over to `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp` as the new editable version of the mapping. We perform this manual copy to ensure that running the scripts will not accidentally overwrite and manual editing that had already been applied. The output version of the dataset has the land clipped from the features using `10-v0-4-clip-land.py`. `11-v0-4-expand-attribs.py` performs the crosswalk from the RB_Type_L3, Attachment and DepthCat attributes to the Natural Values Common Language, the Seamap Ausralia classification scheme and some of the Queensland Gov Wetlands Intertidal and Subtidal classification scheme. This saved the output to `working/11/NW-Features_v0-4.shp`. This is the new publication ready version of the dataset. We manually copy this version to the publication destination of `data/v0-4/out/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_v0-4.shp`, extending the name to add more metadata to it, adding the funding (NESP-MaC), project code (3.17) and institution (AIMS) to the name.
+
+The RB_Type_L3 classification divides many reefs into an active growing region ('Coral Reef') and reef matrix covered in sand section ('Coral Reef Flat'). To calculate the size of reefs and the number of them we need to dissovle these features together. Both these features are classified as 'Coral Reef' under the RB_Type_L2 classification, which clusters the features at a higher level. This clusters all the RB_Type_L3 coral reef types to 'Coral Reef' and all the rocky reef types to 'Rocky Reef'. `12-v0-4-make-RB_Type_L2.py` dissolves neighbouring features together based on the RB_Type_L2 classification scheme. This merges the Coral Reef Flat and Coral Reef features together, creating larger polygons that represent the geological boundary of the reef structure. 
+
+
 
 No rigorous time tracking was applied to the improvements being made, however the following are approximate total digitisation time:
 v0-1 RB - 500 hours
 v0-1 EL - 87 hours
-v0-2 - (+50) 550 hours
-v0-3 - (+80) 630 hours
-v0-4 - (+77) 707 hours (up to 29/7/2025) 13,795 kB 10390 features 7624 depths 2896 rocky reefs
+v0-2 - (v0-1 RB +50 hours) 550 hours
+v0-3 - (v0-2 +80 hours) 630 hours
+v0-4 - (v0-3 +77 hours) 707 hours (up to 29/7/2025) 13,795 kB 10390 features 7624 depths 2896 rocky reefs
 
 
 
