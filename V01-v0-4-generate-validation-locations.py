@@ -138,7 +138,7 @@ MAX_ATTEMPTS_PER_POINT = 10  # Maximum attempts to find a point not on land
 POLYGON_EXTENT_USE_BOUNDING_BOX = True  # Set to True to use bounding box, False for fuzzed polygon
 
 # File paths
-VALIDATION_REGIONS_FILE = "data/v0-4/in/NW-Aus-Features-validation-regions.shp"
+VALIDATION_REGIONS_FILE = "data/v0-4/in/validation/NW-Aus-Features-validation-regions.shp"
 FEATURES_FILE = "data/v0-4/in/Reef-Boundaries_v0-4_edit.shp"
 FULL_COASTLINE_FILE = f"{BASE_PATH}/AU_AIMS_Coastline_50k_2024/Split/AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_split.shp"
 SIMP_COASTLINE_FILE = f"{BASE_PATH}/AU_AIMS_Coastline_50k_2024/Simp/AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_simp.shp"
