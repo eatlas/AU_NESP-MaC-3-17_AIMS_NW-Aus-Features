@@ -190,7 +190,7 @@ import configparser  # added
 # ---------------------------------------------------------------------------
 TARGET_CRS = "EPSG:3112"
 SEARCH_RADIUS_M = 2000
-MAX_SAMPLES = 40
+MAX_SAMPLES = 100
 LOG_INTERVAL = 50
 DEBUG_FEATURES = 3
 PERCENTILES = [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100]
@@ -244,15 +244,19 @@ def repair_geometries(gdf: gpd.GeoDataFrame, label: str) -> gpd.GeoDataFrame:
 # ---------------------------------------------------------------------------
 # Core loading & preparation (Phase 1)
 # ---------------------------------------------------------------------------
-def load_and_prepare() -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame, gpd.GeoDataFrame, str]:
+def load_and_prepare() -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame, gpd.GeoDataFrame, gpd.GeoDataFrame, str]:
     """
-    Load shapefiles A, B, and region mask (paths interpreted relative to CWD).
+    Load shapefiles A, B, region mask, and land.
     Steps:
-      - Read GeoDataFrames directly (let read_file raise if missing).
-      - Repair invalid geometries.
+      - Read A, B, region mask.
+      - Read config.ini to locate land shapefile; load land.
+      - Repair geometries (buffer(0)).
       - Filter A to RB_Type_L1 == 'Reef'.
-      - Subset A & B by intersection with region mask union (no clipping).
-      - Reproject to TARGET_CRS.
+      - Subset A, B, LAND by intersection with region mask union (no clipping yet).
+      - Clip B by land (remove landward areas): B := B - land_union (drop empties).
+      - Mutually retain only A features intersecting B and B features intersecting A (post-clip).
+      - Reproject all (A,B,region,land) to TARGET_CRS.
+    Returns: (gdf_a, gdf_b_clipped, gdf_region, land_subset, original_crs)
     """
     log_info(f"Loading A: {PATH_A}")
     gdf_a = gpd.read_file(PATH_A)
@@ -264,41 +268,115 @@ def load_and_prepare() -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame, gpd.GeoDataF
     if gdf_a.crs is None:
         raise ValueError("Dataset A has no CRS defined.")
     original_crs = gdf_a.crs
-
     if "RB_Type_L1" not in gdf_a.columns:
         raise KeyError("Dataset A missing required field 'RB_Type_L1'.")
 
+    # Load land from config
+    cfg = configparser.ConfigParser()
+    if not cfg.read("config.ini"):
+        raise FileNotFoundError("config.ini missing or unreadable.")
+    base_path = cfg.get("general", "in_3p_path")
+    land_file = f"{base_path}/AU_AIMS_Coastline_50k_2024/Split/AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_split.shp"
+    log_info(f"Loading Land: {land_file}")
+    land_gdf = gpd.read_file(land_file)
+
+    # Filter A to reefs
     pre_a = len(gdf_a)
     gdf_a = gdf_a[gdf_a["RB_Type_L1"] == "Reef"].copy()
     log_info(f"A reef filter: {pre_a} -> {len(gdf_a)}")
 
+    # Repair geometries
     gdf_a = repair_geometries(gdf_a, "A")
     gdf_b = repair_geometries(gdf_b, "B")
     gdf_region = repair_geometries(gdf_region, "Region")
+    land_gdf = repair_geometries(land_gdf, "Land")
+
     if gdf_region.empty:
         raise ValueError("Region mask empty after repair.")
+    if land_gdf.empty:
+        log_warn("Land dataset empty after repair; B clipping will be skipped.")
 
-    region_union = unary_union(gdf_region.geometry.values)
+    # Ensure common CRS (use region CRS)
     region_crs = gdf_region.crs
-    if gdf_a.crs != region_crs:
-        gdf_a = gdf_a.to_crs(region_crs)
-    if gdf_b.crs != region_crs:
-        gdf_b = gdf_b.to_crs(region_crs)
+    for gdf_ref, label in [(gdf_a, "A"), (gdf_b, "B"), (land_gdf, "Land")]:
+        if gdf_ref.crs != region_crs:
+            if label == "A":
+                gdf_a = gdf_a.to_crs(region_crs)
+            elif label == "B":
+                gdf_b = gdf_b.to_crs(region_crs)
+            else:
+                land_gdf = land_gdf.to_crs(region_crs)
 
-    a_before = len(gdf_a)
-    b_before = len(gdf_b)
+    # Subset by region mask intersection
+    region_union = unary_union(gdf_region.geometry.values)
+    a_before = len(gdf_a); b_before = len(gdf_b); land_before = len(land_gdf)
     gdf_a = gdf_a[gdf_a.intersects(region_union)].copy()
     gdf_b = gdf_b[gdf_b.intersects(region_union)].copy()
+    land_gdf = land_gdf[land_gdf.intersects(region_union)].copy()
     log_info(f"A region select: {a_before} -> {len(gdf_a)}")
     log_info(f"B region select: {b_before} -> {len(gdf_b)}")
+    log_info(f"Land region select: {land_before} -> {len(land_gdf)}")
 
+    # Clip B by land (remove landward areas)
+    if not land_gdf.empty and not gdf_b.empty:
+        land_union = unary_union(land_gdf.geometry.values)
+        if not land_union.is_empty:
+            clipped_geoms = []
+            removed = 0
+            for geom in gdf_b.geometry:
+                if geom.intersects(land_union):
+                    diff = geom.difference(land_union)
+                    if diff.is_empty:
+                        removed += 1
+                        continue
+                    clipped_geoms.append(diff)
+                else:
+                    clipped_geoms.append(geom)
+            gdf_b = gdf_b.iloc[0:0].assign(geometry=clipped_geoms) if clipped_geoms else gdf_b.iloc[0:0]
+            gdf_b = gpd.GeoDataFrame(gdf_b, geometry="geometry", crs=region_crs)
+            log_info(f"B clipping by land complete: removed {removed} fully land-overlapped polygons; kept {len(gdf_b)}")
+        else:
+            log_warn("Land union empty; skipping B clipping.")
+    else:
+        log_warn("Skipping B clipping (empty land or B).")
+
+    # --- Debug: write clipped B shapefile ---
+    try:
+        debug_dir = Path("working/V04")
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        debug_path = debug_dir / "debug_B_clipped.shp"
+        gdf_b.to_file(debug_path)
+        log_info(f"Debug: wrote clipped B shapefile to {debug_path}")
+    except Exception as e:
+        log_warn(f"Failed to write debug B clipped shapefile: {e}")
+
+    # Mutual intersection filter (post-clip)
+    a_pre_overlap = len(gdf_a); b_pre_overlap = len(gdf_b)
+    if not gdf_a.empty and not gdf_b.empty:
+        gdf_a = gdf_a.reset_index(drop=True)
+        gdf_b = gdf_b.reset_index(drop=True)
+        overlap_pairs = gpd.sjoin(gdf_a[["geometry"]], gdf_b[["geometry"]], predicate="intersects", how="inner")
+        if overlap_pairs.empty:
+            log_warn("No mutual intersections after clipping; datasets become empty.")
+            gdf_a = gdf_a.iloc[0:0]; gdf_b = gdf_b.iloc[0:0]
+        else:
+            a_keep = overlap_pairs.index.unique()
+            b_keep = overlap_pairs["index_right"].unique()
+            gdf_a = gdf_a.loc[a_keep].copy()
+            gdf_b = gdf_b.loc[b_keep].copy()
+            log_info(f"Mutual overlap filter: A {a_pre_overlap} -> {len(gdf_a)}, B {b_pre_overlap} -> {len(gdf_b)}")
+    else:
+        log_warn("Skipped mutual overlap filter (A or B empty).")
+
+    # Reproject to target CRS
     if region_crs != TARGET_CRS:
-        gdf_a = gdf_a.to_crs(TARGET_CRS)
-        gdf_b = gdf_b.to_crs(TARGET_CRS)
+        if not gdf_a.empty: gdf_a = gdf_a.to_crs(TARGET_CRS)
+        if not gdf_b.empty: gdf_b = gdf_b.to_crs(TARGET_CRS)
         gdf_region = gdf_region.to_crs(TARGET_CRS)
+        if not land_gdf.empty: land_gdf = land_gdf.to_crs(TARGET_CRS)
 
     log_info("Reprojection complete.")
-    return gdf_a, gdf_b, gdf_region, str(original_crs)
+    return gdf_a, gdf_b, gdf_region, land_gdf, str(original_crs)
 
 # ---------------------------------------------------------------------------
 # Simplified dissolve & aggregate EdgeAcc (current)
@@ -419,66 +497,36 @@ def generate_sampling_points(gdf_dissolved: gpd.GeoDataFrame) -> gpd.GeoDataFram
 # Filter sample points near land (Phase 3b)
 # ---------------------------------------------------------------------------
 def filter_sample_points_near_land(sample_pts: gpd.GeoDataFrame,
-                                   region_mask: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+                                   region_mask: gpd.GeoDataFrame,
+                                   land_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
-    Removes sample points within LAND_BUFFER_M of land.
-    Steps:
-      - Read config.ini to get BASE_PATH.
-      - Load land shapefile.
-      - Reproject to TARGET_CRS if needed.
-      - Subset land polygons to those intersecting region mask union.
-      - Dissolve (union) selected land, buffer by LAND_BUFFER_M.
-      - Drop sample points intersecting the buffered land.
-    Returns filtered sample point GeoDataFrame.
+    Removes sample points within LAND_BUFFER_M of land (land_gdf already loaded & region-subset).
+    land_gdf assumed in same CRS as sample_pts.
     """
-    cfg = configparser.ConfigParser()
-    if not cfg.read("config.ini"):
-        log_error("config.ini not found or unreadable.")
-        raise FileNotFoundError("config.ini missing.")
-    try:
-        base_path = cfg.get("general", "in_3p_path")
-    except Exception as e:
-        raise KeyError("Missing 'general.in_3p_path' in config.ini") from e
-
-    land_file = f"{base_path}/AU_AIMS_Coastline_50k_2024/Split/AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_split.shp"
-    log_info(f"Loading land polygons: {land_file}")
-    land = gpd.read_file(land_file)
-
-    # Reproject land if needed
-    if land.crs != sample_pts.crs:
-        land = land.to_crs(sample_pts.crs)
-
-    # Subset to region area
-    region_union = unary_union(region_mask.geometry.values)
-    land = land[land.intersects(region_union)].copy()
-    if land.empty:
-        log_warn("Land subset empty after region mask intersection; no land filtering applied.")
+    if land_gdf.empty:
+        log_warn("Land GeoDataFrame empty; skipping land proximity filter.")
         return sample_pts
 
-    # Dissolve & buffer
-    land_union = unary_union(land.geometry.values)
+    land_union = unary_union(land_gdf.geometry.values)
     if land_union.is_empty:
-        log_warn("Land union empty; skipping land filtering.")
+        log_warn("Land union empty; skipping land proximity filter.")
         return sample_pts
     land_buffer = land_union.buffer(LAND_BUFFER_M)
 
-    # Spatial index filter
     sidx = sample_pts.sindex
     candidate_idx = list(sidx.intersection(land_buffer.bounds))
     if not candidate_idx:
-        log_info("No sample points within land buffer bbox; no filtering needed.")
+        log_info("Land filter: no candidate sample points in buffer bbox.")
         return sample_pts
 
     cand_pts = sample_pts.iloc[candidate_idx]
-    to_remove_mask = cand_pts.intersects(land_buffer)
-    remove_ids = set(cand_pts.index[to_remove_mask])
-
+    remove_ids = set(cand_pts.index[cand_pts.intersects(land_buffer)])
     if not remove_ids:
-        log_info("No sample points within land buffer distance; none removed.")
+        log_info("Land filter: no points within buffer; none removed.")
         return sample_pts
 
     filtered = sample_pts[~sample_pts.index.isin(remove_ids)].copy()
-    log_info(f"Land filter: removed {len(remove_ids)} / {len(sample_pts)} sample points within {LAND_BUFFER_M} m of land.")
+    log_info(f"Land filter: removed {len(remove_ids)} / {len(sample_pts)} points within {LAND_BUFFER_M} m of land.")
     return filtered
 
 # ---------------------------------------------------------------------------
@@ -585,7 +633,7 @@ def generate_match_lines(sample_pts: gpd.GeoDataFrame,
 # ---------------------------------------------------------------------------
 def main():
     try:
-        gdf_a, gdf_b, gdf_region, orig_crs = load_and_prepare()
+        gdf_a, gdf_b, gdf_region, land_gdf, orig_crs = load_and_prepare()
     except Exception as e:
         log_error(f"Failed during load_and_prepare: {e}")
         sys.exit(1)
@@ -594,22 +642,15 @@ def main():
     log_info(f"Original CRS (A): {orig_crs}")
     log_info(f"Working CRS: {gdf_a.crs}")
     log_info(f"Filtered A reef features: {len(gdf_a)}")
-    log_info(f"Filtered B features: {len(gdf_b)}")
+    log_info(f"Filtered & clipped B features: {len(gdf_b)}")
     log_info(f"Region mask polygons: {len(gdf_region)}")
+    log_info(f"Land polygons (subset): {len(land_gdf)}")
 
-    # Phase 2 dissolve
     gdf_dissolved = dissolve_and_aggregate_edgeacc(gdf_a)
-
-    # Phase 3 sampling (points only)
     sample_pts = generate_sampling_points(gdf_dissolved)
-
-    # Phase 3b land proximity filter
-    sample_pts = filter_sample_points_near_land(sample_pts, gdf_region)
-
-    # Phase 4 match lines to B boundaries
+    sample_pts = filter_sample_points_near_land(sample_pts, gdf_region, land_gdf)
     match_lines, no_match_pts = generate_match_lines(sample_pts, gdf_b)
 
-    # Reproject outputs to original CRS if needed
     if str(gdf_dissolved.crs) != str(orig_crs):
         gdf_write = gdf_dissolved.to_crs(orig_crs)
         sample_pts_write = sample_pts.to_crs(orig_crs)
@@ -621,27 +662,14 @@ def main():
         match_lines_write = match_lines
         no_match_pts_write = no_match_pts
 
-    out_dir = Path("working/V04")
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    out_dissolve = out_dir / "dissolve_and_aggregate.shp"
-    log_info(f"Writing dissolved shapefile: {out_dissolve}")
-    gdf_write.to_file(out_dissolve)
-
-    out_samples = out_dir / "sample_site_pts.shp"
-    log_info(f"Writing filtered sample points shapefile: {out_samples}")
-    sample_pts_write.to_file(out_samples)
-
-    out_lines = out_dir / "sample_match_lines.shp"
-    log_info(f"Writing match lines shapefile: {out_lines}")
-    match_lines_write.to_file(out_lines)
-
-    out_nomatch = out_dir / "sample_no_match_pts.shp"
-    log_info(f"Writing no-match points shapefile: {out_nomatch}")
-    no_match_pts_write.to_file(out_nomatch)
-
+    out_dir = Path("working/V04"); out_dir.mkdir(parents=True, exist_ok=True)
+    gdf_write.to_file(out_dir / "dissolve_and_aggregate.shp")
+    sample_pts_write.to_file(out_dir / "sample_site_pts.shp")
+    match_lines_write.to_file(out_dir / "sample_match_lines.shp")
+    no_match_pts_write.to_file(out_dir / "sample_no_match_pts.shp")
     log_info("Match line generation complete. Inspect outputs in QGIS.")
 
 if __name__ == "__main__":
     main()
+
 
