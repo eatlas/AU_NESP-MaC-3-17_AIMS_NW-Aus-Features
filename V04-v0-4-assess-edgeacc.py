@@ -46,7 +46,7 @@ Processing overview
      If all contributing EdgeAcc_m are null, retain null and emit a warning.
 4. Prepare B boundary index:
    - Explode multipart polygons to singlepart.
-   - Extract only exterior rings as LineStrings.
+   - Extract exterior AND interior (hole) rings as LineStrings (both are valid match targets).
    - Build an STRtree (shapely) over these LineStrings.
    - Also create a unary union (MultiLineString) for rare fallback distance queries.
 5. Per dissolved A polygon:
@@ -534,21 +534,26 @@ def filter_sample_points_near_land(sample_pts: gpd.GeoDataFrame,
 # ---------------------------------------------------------------------------
 def extract_b_boundaries(gdf_b: gpd.GeoDataFrame):
     """
-    Return (list_of_line_geoms, STRtree_index, union_multiline) for B exteriors.
-    Holes ignored; multipart exploded implicitly via access to .geoms if needed.
+    Return (list_of_line_geoms, STRtree_index, union_multiline) for B polygon rings.
+    Includes both exterior rings and interior (hole) rings so inner reef / island-edge
+    sample points can match to landward reef boundaries.
     """
     line_geoms = []
     for geom in gdf_b.geometry:
         if geom is None or geom.is_empty:
             continue
-        # Handle MultiPolygons
-        polys = getattr(geom, "geoms", [geom])
+        polys = getattr(geom, "geoms", [geom])  # handle MultiPolygon
         for p in polys:
+            # Exterior
             ext = getattr(p, "exterior", None)
             if ext:
                 line_geoms.append(LineString(ext.coords))
+            # Interiors (holes)
+            for interior in getattr(p, "interiors", []):
+                if interior and len(interior.coords) > 2:
+                    line_geoms.append(LineString(interior.coords))
     if not line_geoms:
-        raise ValueError("No exterior boundaries extracted from B.")
+        raise ValueError("No polygon rings (exterior/interior) extracted from B.")
     tree = STRtree(line_geoms)
     union_ml = MultiLineString([lg for lg in line_geoms])
     return line_geoms, tree, union_ml
