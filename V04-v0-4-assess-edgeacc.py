@@ -1,5 +1,5 @@
 """
-Reef boundary (version v0-4) edge accuracy validation against legacy v0-1 mapping.
+Reef boundary (version v0-4) edge accuracy validation against independent legacy v0-1 mapping.
 
 Purpose
 Evaluate how well the v0-4 reef boundary dataset (A) aligns with an earlier reef/shallow
@@ -16,103 +16,41 @@ B (v0-1 reef/shallow mask): data\\v0-1_dual-maps\\Reef-mask_Ref2_EL\\
     AU_AIMS_NESP-MaC-3-17_Rough-reef-shallow-mask_87hr.shp
 Region mask (comparability selector): data\\v0-4\\in\\validation\\Boundary-comp-regions_v0-4-to-v0-1-EL.shp
 
-Core assumptions
-- Neither dataset is definitive ground truth; A supplies feature-level EdgeAcc_m estimates.
-- Only A features with RB_Type_L1 == 'Reef' are evaluated.
-- Region mask acts only as a spatial selector (intersects test); geometries are not clipped.
-- Comparison is many-to-many tolerant of splits/merges between versions.
-- Only exterior perimeters are sampled (holes ignored).
-- Distances are one-way (A→B); no reciprocal B→A analysis.
-
-Library / environment (confirmed available)
-- Python 3.13.1
-- geopandas 1.0.1
-- shapely 2.0.7
-- numpy, pandas
-- fiona 1.10.1
-- GDAL 3.10.2
-- matplotlib 3.9.x (for plots)
-
 Processing overview
-1. Load datasets A, B, and the region mask; record A’s original CRS. Reproject all
-   working geometries to EPSG:3112 (metres) for planar distance integrity.
-2. Filter A to RB_Type_L1 == 'Reef'. Build region union; retain (do not clip) only
-   those A and B features whose geometries intersect the region union.
+1. Load datasets A, B, region mask, and coastline land layer (via config.ini). Record A’s original CRS.
+2. Filter A to RB_Type_L1 == 'Reef'. Repair invalid geometries (buffer(0)). Subset A, B, and land to features
+   intersecting the region mask union. Clip B by land (remove landward/inland portions). Apply mutual overlap
+   filter: retain only those A features that intersect at least one (clipped) B feature and only those B features
+   intersecting at least one A feature (eliminates isolated reefs that would otherwise spuriously match distant B).
+   Reproject A, B, region, land to EPSG:3112 for planar distance integrity.
 3. Dissolve A reefs:
    - Unary union all filtered A reef polygons.
-   - Explode to singlepart dissolved “reef extents”.
-   - For each dissolved polygon, compute EdgeAcc_m = max(EdgeAcc_m) of any original
-     A polygons that intersect it (after a validity repair via buffer(0) if needed).
+   - Explode to single-part dissolved “reef extents”.
+   - For each dissolved polygon, compute EdgeAcc_m = max(EdgeAcc_m) of any original A polygons that intersect it.
      If all contributing EdgeAcc_m are null, retain null and emit a warning.
 4. Prepare B boundary index:
-   - Explode multipart polygons to singlepart.
-   - Extract exterior AND interior (hole) rings as LineStrings (both are valid match targets).
+   - Include BOTH exterior rings and interior (hole) rings of (clipped) B polygons as match candidates (enables
+     valid landward/fringing reef inner-edge comparisons).
    - Build an STRtree (shapely) over these LineStrings.
    - Also create a unary union (MultiLineString) for rare fallback distance queries.
 5. Per dissolved A polygon:
+   - Generate perimeter sampling points along the exterior ring only.
    - Skip (omit from results entirely) if:
        * Geometry invalid after repair or empty, OR
        * Exterior ring has <= 4 unique coordinate tuples (insufficient complexity).
-   - Determine sampling size k = min(MAX_SAMPLES, number of unique exterior vertices),
-     with MAX_SAMPLES = 40.
-   - Sample k equidistant points along exterior at fraction i/k of perimeter length
-     for i = 0..k-1 (start point included once; no duplicate at full length).
-   - For each sample point:
-       * Perform spatial index candidate retrieval using a bounding box of
-         point.buffer(SEARCH_RADIUS_M).bounds (SEARCH_RADIUS_M = 2000 m).
-       * Compute exact distances to candidate LineStrings; take the minimum.
-       * If any candidate within radius: store distance and create a LineString
-         from sample point to the nearest point on that candidate boundary.
-       * If no candidate within radius: treat distance as capped at SEARCH_RADIUS_M,
-         record a “no-match” point (no line stored).
-       * In edge cases of empty candidate return where nearby geometry exists,
-         fall back to distance against the union linework.
-6. Distance statistics per dissolved A polygon:
-   - Collect all k distances (with capped values included for no-matches).
-   - Compute percentiles p05, p10, p15, ..., p95, p100 (increments of 5) using
-     numpy.percentile with linear interpolation (default method); round each to
-     0.1 m: round(value, 1).
-   - EdgePerc: Percentile rank (0–100) of EdgeAcc_m within the sampled distance
-     distribution by linear interpolation over the sorted distances and their
-     associated empirical percentile positions; round to 0.1. If EdgeAcc_m is
-     null → EdgePerc null. If EdgeAcc_m exceeds all observed distances → 100.0.
-   - EdgeTo50p: Ratio p50 / EdgeAcc_m when EdgeAcc_m > 0 and p50 present; else null.
-     (Stored unrounded or optionally rounded to 4 decimals—will implement 4-decimal
-     rounding for readability.)
-7. Output features (only for non-skipped dissolved polygons) include attributes:
-     EdgeAcc_m
-     p05, p10, p15, ..., p95, p100
-     EdgePerc
-     EdgeTo50p
-8. Write dissolved polygon output shapefile:
-     working\\V04\\Reef_EdgeAcc_Comparison.shp
-   Reproject results back to the original CRS of dataset A before write.
-9. Diagnostic / supplementary outputs:
-   - Matched sample lines: working\\V04\\Reef_EdgeAcc_SampleLines.shp
-       Fields:
-         FID   (integer index of dissolved polygon feature)
-         SID   (sample index 0..k-1)
-         DIST_M (measured distance in metres, float, 0.1 m rounding applied)
-       Geometry: LineString from sampled A boundary point to nearest B boundary point.
-       (EDGEACC intentionally omitted per clarified spec.)
-   - No-match sample points: working\\V04\\Reef_EdgeAcc_NoMatchPts.shp
-       Fields:
-         FID
-         SID
-       Geometry: Point (original sample location) with no B boundary within radius.
-10. Plots (log-log scale):
-    - EdgeAcc_m vs p50 and p90 (two series): EdgeAcc_vs_p50_p90.png
-    - EdgeAcc_m vs EdgeTo50p: EdgeAcc_vs_EdgeTo50p.png
-11. Logging:
-    - Progress message every LOG_INTERVAL (50) dissolved polygons.
-    - Additional debug tracing (geometry summary, first few sample distances)
-      for the first DEBUG_FEATURES (3) dissolved polygons.
+   - Determine sampling size k = min(MAX_SAMPLES, number of unique exterior vertices); current MAX_SAMPLES = 100
+     (original concept referenced 40; percentile/statistical steps still compatible).
+   - Sample k equidistant points at fraction i/k of perimeter length for i = 0..k-1 (no duplicate at full length).
+   - Exclude any sampled points within 10 m of land (land buffer removal eliminates back/landward sides of fringing reefs).
+   - For each retained sample point:
+       * Perform spatial index candidate retrieval using pt.buffer(SEARCH_RADIUS_M).bounds (SEARCH_RADIUS_M = 2000 m).
+       * Compute exact distances to candidate LineStrings (exterior or interior). Take the minimum.
+       * If a candidate is within radius: store distance and create a LineString from sample point to nearest boundary point.
+       * If no candidate within radius: treat distance as capped at SEARCH_RADIUS_M and record a “no-match” point.
+       * Fallback to union linework if candidate retrieval unexpectedly returns none while geometry is nearby.
 
 Field definitions
 - EdgeAcc_m: Aggregated (max) worst ~10% boundary error estimate from source A polygons.
-- pXX: Empirical distance percentiles (metres, rounded to 0.1).
-- EdgePerc: Percentile rank position (0–100) of EdgeAcc_m among sampled distances (0.1 precision).
-- EdgeTo50p: p50 / EdgeAcc_m (dimensionless scalar); >1 implies EdgeAcc_m underestimates median discrepancy.
 - DIST_M (in sample lines): Distance from sample point to nearest B boundary (metres, 0.1 precision).
 
 Sampling & distance methodology
@@ -124,52 +62,32 @@ Sampling & distance methodology
   signaling absence of local correspondence (pile-up at SEARCH_RADIUS_M).
 
 Robustness / defensive measures
-- Repair invalid geometries via buffer(0); skip if still invalid/empty (no output row).
-- Skip overly simple perimeters (<=4 unique vertices) to avoid degenerate statistics.
-- STRtree usage tolerant of shapely 2.x return types (geometry objects).
-- Fallback to union linework distance if an unexpected empty candidate set occurs.
-- Null EdgeAcc_m values propagate; EdgePerc and EdgeTo50p become null accordingly.
-- Handles moderate dataset size (≈1000 dissolved polygons post-filter) in memory.
+- Geometry repair via buffer(0).
+- Mutual overlap filtering prevents false long-range matches.
+- Interior ring inclusion ensures valid landward edge matching.
+- Land exclusion suppresses spurious back-edge evaluations.
+- STRtree acceleration; union fallback for rare edge cases.
+- Null propagation of EdgeAcc_m where appropriate.
 
 Limitations
-- Asymmetric comparison (A→B only); discrepancies where B extends beyond A are not evaluated reciprocally.
-- Search radius fixed (2000 m) may saturate distances in areas of extreme divergence.
-- Dissolve eliminates internal partition provenance; evaluation is at aggregated reef extent level.
-- Percentile resolution limited by sample size (≤40).
-- Capping introduces an upper-tail compression; interpretation should consider potential censoring at SEARCH_RADIUS_M.
+- Asymmetric comparison (A→B only).
+- Fixed search radius (2000 m) may censor extreme divergences.
+- Dissolve loses internal partition provenance.
+- Sample size ceiling (current 100) limits percentile resolution.
+- Censoring at SEARCH_RADIUS_M compresses upper tail.
 
 Performance considerations
-- Complexity roughly O(total_samples * log M) with spatial indexing (M = count of B boundary segments).
-- Sample size constrained (≤40 per polygon) for tractable, uniform runtime.
-- Unary union operations acceptable at described scale.
+- Complexity ≈ O(total_samples * log M), M = count of B ring segments.
+- Memory acceptable at anticipated scale.
 
 Error handling strategy
-- Raise or log critical errors on missing required fields (e.g., RB_Type_L1, EdgeAcc_m presence).
-- Continue past individual polygon anomalies (skips) without aborting batch.
-- Clear messaging for skipped polygons (invalid / too simple).
-
-Key constants (to be defined near top in implementation)
-  SEARCH_RADIUS_M = 2000
-  MAX_SAMPLES = 40
-  LOG_INTERVAL = 50
-  DEBUG_FEATURES = 3
-  PERCENTILES = [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100]
+- Explicit checks for required fields & CRS.
+- Continue past recoverable geometry issues.
+- Clear logging for skips and null aggregations.
 
 Rerun guidance
-- Remove or archive existing outputs in working\\V04 before regeneration for a clean run.
-- Adjust SEARCH_RADIUS_M or MAX_SAMPLES constants for sensitivity analyses if needed.
-- Re-run end-to-end to ensure derived plots and diagnostic layers stay consistent.
+- Clear working\\V04 outputs for clean regeneration.
 
-Planned implementation structure (forthcoming)
-- main() orchestration
-- load_and_prepare() for inputs & CRS
-- dissolve_and_aggregate_edgeacc()
-- build_b_boundary_index()
-- sample_and_measure_distances()
-- compute_statistics()
-- write_outputs()
-- generate_plots()
-- Utility helpers: percentile_rank(), safe_buffer0(), log_progress()
 """
 from __future__ import annotations
 
@@ -184,6 +102,7 @@ from shapely.geometry import LineString, Point, MultiLineString  # added
 from shapely.ops import nearest_points  # added
 import numpy as np  # added
 import configparser  # added
+import pandas as pd  # added for aggregation
 
 # ---------------------------------------------------------------------------
 # Constants (Phase 0)
@@ -212,34 +131,6 @@ def log_warn(msg: str) -> None:
 
 def log_error(msg: str) -> None:
     print(f"[ERROR] {msg}", file=sys.stderr)
-
-# ---------------------------------------------------------------------------
-# Geometry helpers
-# ---------------------------------------------------------------------------
-def safe_buffer0(geom: base.BaseGeometry) -> Optional[base.BaseGeometry]:
-    """Attempt validity repair with buffer(0). Return repaired geometry or None if invalid/empty."""
-    if geom is None or geom.is_empty:
-        return None
-    try:
-        if not geom.is_valid:
-            geom = geom.buffer(0)
-        if geom.is_empty:
-            return None
-        return geom
-    except Exception:
-        return None
-
-def repair_geometries(gdf: gpd.GeoDataFrame, label: str) -> gpd.GeoDataFrame:
-    """Repair invalid geometries; drop empties."""
-    original_count = len(gdf)
-    gdf = gdf.copy()
-    gdf["geometry"] = gdf["geometry"].apply(safe_buffer0)
-    gdf = gdf[~gdf.geometry.isna() & ~gdf.geometry.is_empty]
-    repaired_count = len(gdf)
-    dropped = original_count - repaired_count
-    if dropped:
-        log_warn(f"{label}: dropped {dropped} invalid/empty geometries after repair (kept {repaired_count}).")
-    return gdf
 
 # ---------------------------------------------------------------------------
 # Core loading & preparation (Phase 1)
@@ -285,11 +176,6 @@ def load_and_prepare() -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame, gpd.GeoDataF
     gdf_a = gdf_a[gdf_a["RB_Type_L1"] == "Reef"].copy()
     log_info(f"A reef filter: {pre_a} -> {len(gdf_a)}")
 
-    # Repair geometries
-    gdf_a = repair_geometries(gdf_a, "A")
-    gdf_b = repair_geometries(gdf_b, "B")
-    gdf_region = repair_geometries(gdf_region, "Region")
-    land_gdf = repair_geometries(land_gdf, "Land")
 
     if gdf_region.empty:
         raise ValueError("Region mask empty after repair.")
@@ -383,65 +269,70 @@ def load_and_prepare() -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame, gpd.GeoDataF
 # ---------------------------------------------------------------------------
 def dissolve_and_aggregate_edgeacc(gdf_a: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
-    Simplified dissolve:
-      1) Unary union then explode to single-part polygons.
-      2) Spatial join original features to parts (intersects).
-      3) Group by part id to compute max EdgeAcc_m (if present).
-    Returns GeoDataFrame with FID, EdgeAcc_m, geometry.
+    Dissolve all reef polygons into single-part polygons and aggregate attributes.
+      - EdgeAcc_m: max of contributing features
+      - Area_km2 : sum of contributing features
+    Returns GeoDataFrame with FID, EdgeAcc_m, Area_km2, geometry.
+    Crashes early if required fields are missing.
     """
-    has_edgeacc = "EdgeAcc_m" in gdf_a.columns
-    if not has_edgeacc:
-        log_warn("Source A missing 'EdgeAcc_m'; aggregated result will contain nulls.")
+    assert "EdgeAcc_m" in gdf_a.columns, "Required field 'EdgeAcc_m' missing in input."
+    assert "Area_km2" in gdf_a.columns, "Required field 'Area_km2' missing in input."
 
-    # 1. Dissolve all reef polygons, explode to single parts
+    # 1. Dissolve (unary union) then explode to single parts
     union_geom = unary_union(gdf_a.geometry.values)
     if union_geom.is_empty:
         raise ValueError("Union produced empty geometry.")
-    dissolved_gdf = gpd.GeoDataFrame(geometry=[union_geom], crs=gdf_a.crs).explode(index_parts=False).reset_index(drop=True)
-    dissolved_gdf["FID"] = dissolved_gdf.index  # stable id
+    dissolved_gdf = (
+        gpd.GeoDataFrame(geometry=[union_geom], crs=gdf_a.crs)
+        .explode(index_parts=False)
+        .reset_index(drop=True)
+    )
+    dissolved_gdf["FID"] = dissolved_gdf.index
     log_info(f"Dissolve created {len(dissolved_gdf)} polygon parts.")
 
-    # 2. Spatial join original polygons to dissolved parts
-    # (intersects predicate; we only need matching polygons)
+    # 2. Spatial join originals to dissolved parts
     joined = gpd.sjoin(
-        gdf_a[["EdgeAcc_m", "geometry"]] if has_edgeacc else gdf_a[["geometry"]],
+        gdf_a[["EdgeAcc_m", "Area_km2", "geometry"]],
         dissolved_gdf[["FID", "geometry"]],
         predicate="intersects",
         how="inner"
     )
 
     if joined.empty:
-        log_warn("Spatial join returned no matches; all EdgeAcc_m will be null.")
+        log_warn("Spatial join returned no matches; all aggregates set to null/zero.")
         dissolved_gdf["EdgeAcc_m"] = None
-        return dissolved_gdf[["FID", "EdgeAcc_m", "geometry"]]
+        dissolved_gdf["Area_km2"] = 0.0
+        return dissolved_gdf[["FID", "EdgeAcc_m", "Area_km2", "geometry"]]
 
-    # 3. Aggregate max EdgeAcc_m per FID
-    if has_edgeacc:
-        # Coerce numeric, ignore non-numeric
-        joined["_EdgeAcc_num"] = (
-            joined["EdgeAcc_m"]
-            .apply(lambda v: float(v) if v is not None and str(v).strip() != "" else None)
-        )
-        agg = (
-            joined.groupby("FID")["_EdgeAcc_num"]
-            .max()
-            .rename("EdgeAcc_m")
-            .to_frame()
-            .reset_index()
-        )
-    else:
-        agg = dissolved_gdf[["FID"]].copy()
-        agg["EdgeAcc_m"] = None
+    # 3. Numeric coercion
+    joined["_EdgeAcc_num"] = pd.to_numeric(joined["EdgeAcc_m"], errors="coerce")
+    joined["_Area_km2_num"] = pd.to_numeric(joined["Area_km2"], errors="coerce")
 
-    # Merge back
-    out = dissolved_gdf.merge(agg, on="FID", how="left")
-    # Warn on null EdgeAcc_m where source polygons existed
-    if has_edgeacc:
-        null_count = out["EdgeAcc_m"].isna().sum()
-        if null_count:
-            log_warn(f"{null_count} dissolved parts have null EdgeAcc_m (all contributing values null or non-numeric).")
+    # 4. Aggregate
+    agg_df = (
+        joined.groupby("FID")
+        .agg({
+            "_EdgeAcc_num": "max",
+            "_Area_km2_num": "sum"
+        })
+        .reset_index()
+        .rename(columns={
+            "_EdgeAcc_num": "EdgeAcc_m",
+            "_Area_km2_num": "Area_km2"
+        })
+    )
 
-    return out[["FID", "EdgeAcc_m", "geometry"]]
+    out = dissolved_gdf.merge(agg_df, on="FID", how="left")
+
+    # Basic warnings
+    null_edge = out["EdgeAcc_m"].isna().sum()
+    if null_edge:
+        log_warn(f"{null_edge} dissolved parts have null EdgeAcc_m after aggregation.")
+    zero_area = (out["Area_km2"] == 0).sum()
+    if zero_area:
+        log_warn(f"{zero_area} dissolved parts have zero Area_km2 after aggregation.")
+
+    return out[["FID", "EdgeAcc_m", "Area_km2", "geometry"]]
 
 # ---------------------------------------------------------------------------
 # Perimeter sampling (Phase 3 - points only, no distances to B yet)
@@ -676,5 +567,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
