@@ -9,7 +9,16 @@ Questions below
 ======= vvvvvvv =========
 
 
-
+19. How did you tell whether a feature is a coral reef or rocky reef?
+21. Why were coral reefs mapped as 'Coral Reef' and 'Coral Reef Flat'?
+23. Why weren't bathymetry datasets used as part of the initial mapping (version v0-1, to v0-4)?
+25. Can this dataset help me find good fishing locations?
+27. How many reefs did this mapping discover?
+29. What enabled you to map reefs now? Could this mappping have been done in the past?
+31. How do I download the dataset?
+33. What is reef mapping?
+35. What do the different reef types mean?
+37. What is the intended purpose of this dataset?
 
 
 
