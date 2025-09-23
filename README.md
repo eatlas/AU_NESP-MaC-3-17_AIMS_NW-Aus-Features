@@ -115,6 +115,36 @@ This script clips the Reef_boundaries_v0-4_edit to the coastline.
 -**`20-v0-4-generate-validation-locations.py`**
 This script generates a validation locations for review. This generates shapefiles that are then populated by experts based on the best available data. This includes setting the attributes, and adjusting the boundary estimates. After these adjustments we had a validation dataset that can then be compared with the mapped dataset.
 
+- **`09a-v0-4-download-in-data.py`**
+Downloads required third‑party public datasets and previous version inputs (including v0-3) used to construct and analyse v0-4.
+
+- **`11-v0-4-expand-attribs.py`**
+Adds external classification scheme fields (e.g. NVCL, Seamap, Wetlands) to the edited v0-4 features via a crosswalk and recalculates area and EdgeAcc_m types, outputting a harmonised publication-ready shapefile.
+
+- **`12-v0-4-make-RB_Type_L2.py`**
+Dissolves edited v0-4 features to RB_Type_L2 extents, aggregating L3 attributes and deriving representative Attachment, DepthCat, confidence, and edge accuracy metrics per dissolved reef polygon.
+
+- **`V01-v0-4-generate-validation-locations.py`**
+Validation: Generates stratified multi-batch validation datasets (centroids, simplified extents, boundary-error points, plus fake locations) for multiple validators across 12 regions.
+
+- **`V02-v0-4-combine-validation-batches.py`**
+Validation: Merges per-batch validation shapefiles for each validator, reindexes ValidID values, and filters boundary-error points to features marked as existing.
+
+- **`V03-v0-4-assess-boundary-error.py`**
+Validation: Computes positional boundary error statistics by comparing validation boundary points to multiple historical/version reef datasets and summarising geodetic distance distributions by region.
+
+- **`V04a-v0-4-assess-edgeacc.py`**
+Validation: Samples v0-4 reef perimeters and measures nearest distances to an independent legacy reef/shallow mask to evaluate EdgeAcc_m performance versus empirical boundary error percentiles.
+
+- **`V04b-v0-4-analyse-match-lines.py`**
+Validation: Aggregates sampled match-line distances per reef to derive full boundary error percentile distributions and metrics (EdgePerc, EdgeTo50p) for modelling edge uncertainty.
+
+- **`V04c-v0-4-test-monte-carlo-boundary.py`**
+Validation: Generates simulated (dithered) reef boundaries via stochastic buffering using EdgeAcc_m-derived log-normal ratios to test Monte Carlo boundary uncertainty modelling.
+
+- **`A02-v0-4-uncharted-reefs.py`**
+Analysis: Identifies coral and rocky reef features within AHO uncharted areas that are not present in AHO reef or ReefKIM datasets to flag potentially uncharted reefs.
+
 - **`20a-download-qaqc-data.py` - Unused**
 Downloads additional datasets for quality assurance and quality control (QAQC). This includes bathymetry datasets.
 
