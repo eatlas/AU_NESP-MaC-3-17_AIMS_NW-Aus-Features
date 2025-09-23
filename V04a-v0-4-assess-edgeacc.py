@@ -11,10 +11,10 @@ error estimate) within that empirical distribution (EdgePerc) plus a median scal
 metric (EdgeTo50p).
 
 Data inputs (paths relative to project root)
-A (v0-4 features): data\\v0-4\\out\\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_v0-4.shp
-B (v0-1 reef/shallow mask): data\\v0-1_dual-maps\\Reef-mask_Ref2_EL\\
+A (v0-4 features): data/v0-4/out/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_v0-4.shp
+B (v0-1 reef/shallow mask): data/v0-1_dual-maps/Reef-mask_Ref2_EL/
     AU_AIMS_NESP-MaC-3-17_Rough-reef-shallow-mask_87hr.shp
-Region mask (comparability selector): data\\v0-4\\in\\validation\\Boundary-comp-regions_v0-4-to-v0-1-EL.shp
+Region mask (comparability selector): data/v0-4/in/validation/Boundary-comp-regions_v0-4-to-v0-1-EL.shp
 
 Processing overview
 1. Load datasets A, B, region mask, and coastline land layer (via config.ini). Record A’s original CRS.
@@ -86,7 +86,7 @@ Error handling strategy
 - Clear logging for skips and null aggregations.
 
 Rerun guidance
-- Clear working\\V04 outputs for clean regeneration.
+- Clear working/V04 outputs for clean regeneration.
 
 """
 from __future__ import annotations
@@ -117,8 +117,10 @@ LAND_BUFFER_M = 10  # new
 
 # Paths now relative to current working directory (no project_root resolution)
 PATH_A = "data/v0-4/out/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_v0-4.shp"
-PATH_B = "data/v0-1_dual-maps/Reef-mask_Ref2_EL/AU_AIMS_NESP-MaC-3-17_Rough-reef-shallow-mask_87hr.shp"
+# PATH_B = "data/v0-1_dual-maps/Reef-mask_Ref2_EL/AU_AIMS_NESP-MaC-3-17_Rough-reef-shallow-mask_87hr.shp"
+PATH_B = "working/V04c/NW-Aus-Feat_v0-4_RB_Type_L1_dithered.shp"
 PATH_REGION = "data/v0-4/in/validation/Boundary-comp-regions_v0-4-to-v0-1-EL.shp"
+OUTPUT_A = "NW-Aus-Feat_v0-4_RB_Type_L1_clip.shp"
 
 # ---------------------------------------------------------------------------
 # Lightweight logging helpers
@@ -558,8 +560,8 @@ def main():
         match_lines_write = match_lines
         no_match_pts_write = no_match_pts
 
-    out_dir = Path("working/V04"); out_dir.mkdir(parents=True, exist_ok=True)
-    gdf_write.to_file(out_dir / "dissolve_and_aggregate.shp")
+    out_dir = Path("working/V04a"); out_dir.mkdir(parents=True, exist_ok=True)
+    gdf_write.to_file(out_dir / OUTPUT_A)
     sample_pts_write.to_file(out_dir / "sample_site_pts.shp")
     match_lines_write.to_file(out_dir / "sample_match_lines.shp")
     no_match_pts_write.to_file(out_dir / "sample_no_match_pts.shp")
