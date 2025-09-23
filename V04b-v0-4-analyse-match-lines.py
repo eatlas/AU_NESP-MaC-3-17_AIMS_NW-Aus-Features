@@ -8,7 +8,7 @@ independent mapping of the reefs (AU_AIMS_NESP-MaC-3-17_Rough-reef-shallow-mask_
 This comparison is limited to masked areas determined by Boundary-comp-regions_v0-4-to-v0-1-EL.shp.
 This mask is to limit the comparision to areas where the Rough Reef Mask does not include
 any shallow sediments areas and the digitisation accuracy is reasonably good.
-This duplicate mapping allows use to understand the variability in the feature boundaries
+This duplicate mapping allows us to understand the variability in the feature boundaries
 and to understand the distribution in the boundary errors. The goal is to answer the question:
 Given that we recorded a single EdgeAcc_m value for each reef feature, how does this single
 value compare with the full distribution of errors. Does the EdgeAcc_m represent the worst
@@ -23,7 +23,7 @@ in counting reefs, which is influenced by the reef area and the reef proximity t
 The processing was split into two scripts to limit the complexity of each script. This script
 uses the matched line segments produced by V04-v0-4-assess-edgeacc.py. Summary statistics
 are calculated for each reef feature and these statistics are joined back to the 
-dissolve_and_aggregate.shp, which is a filtered and dissolved version of the v0-4 reef features.
+NW-Aus-Feat_v0-4_RB_Type_L1_clip.shp, which is a filtered and dissolved version of the v0-4 reef features.
 
 Limitations:
 In this analysis we are comparing the v0-4 dataset (A) with the Rough Reef Mask (B). The Rough 
@@ -34,7 +34,7 @@ true boundary error. However, the relative error values and the distribution of 
 informative for understanding the boundary accuracy.
 
 Inputs (produced by V04 script)
-  working/V04/dissolve_and_aggregate.shp
+  working/V04/NW-Aus-Feat_v0-4_RB_Type_L1_clip.shp
      - Polygon layer (A dissolved reef extents) with:
          FID (int) unique identifier
          EdgeAcc_m (float/int) aggregated max worst ~10% edge accuracy estimate
@@ -47,7 +47,7 @@ Inputs (produced by V04 script)
          geometry (LineString)
 
 Assumptions / confirmed conditions
-  - All FIDs referenced in sample_match_lines exist in dissolve_and_aggregate.
+  - All FIDs referenced in sample_match_lines exist in NW-Aus-Feat_v0-4_RB_Type_L1_clip.shp.
   - DIST_M values are already computed (trust stored attribute; no recomputation).
   - No null or capped SEARCH_RADIUS_M placeholder values present (DIST_M is direct distribution).
   - EdgeAcc_m has no nulls in the current dataset (if null encountered later: EdgePerc/EdgeTo50p set null).
@@ -117,11 +117,11 @@ PERCENTILE_FIELDS = [f"p{str(p).zfill(2)}" if p < 100 else "p100" for p in PERCE
 LOG_INTERVAL = 50
 
 # Input paths (relative to project root)
-DISSOLVE_SHP = "working/V04/dissolve_and_aggregate.shp"
-MATCH_LINES_SHP = "working/V04/sample_match_lines.shp"
+DISSOLVE_SHP = "working/V04a/NW-Aus-Feat_v0-4_RB_Type_L1_clip.shp"
+MATCH_LINES_SHP = "working/V04a/sample_match_lines.shp"
 
 # Output path
-OUTPUT_DIR = Path("working/V04b")
+OUTPUT_DIR = Path("working/V04b-dither")
 OUTPUT_SHP = OUTPUT_DIR / "reef_edge_metrics.shp"
 
 # Logging helpers
@@ -168,6 +168,7 @@ def compute_metrics(gdf_poly: gpd.GeoDataFrame, gdf_lines: gpd.GeoDataFrame) -> 
     """
     Group match lines by FID, compute percentiles & metrics, merge back to polygons.
     Polygons with no lines are dropped.
+    Adds EdgeToXXp ratios (pXX / EdgeAcc_m) for all configured percentiles.
     """
     # Ensure numeric
     gdf_lines = gdf_lines.copy()
@@ -182,43 +183,46 @@ def compute_metrics(gdf_poly: gpd.GeoDataFrame, gdf_lines: gpd.GeoDataFrame) -> 
         dists = grp["DIST_M"].dropna().to_numpy(dtype=float)
         if dists.size == 0:
             continue
-        # Percentiles
         perc_vals = np.percentile(dists, PERCENTILES)
         perc_vals = np.round(perc_vals, 1)
-        p_map = {f"p{str(p).zfill(2)}" if p < 100 else "p100": v for p, v in zip(PERCENTILES, perc_vals)}
-        # EdgePerc & EdgeTo50p
-        edge_acc = gdf_poly.loc[gdf_poly["FID"] == fid, "EdgeAcc_m"]
-        if edge_acc.empty:
+        p_map = { (f"p{str(p).zfill(2)}" if p < 100 else "p100"): v for p, v in zip(PERCENTILES, perc_vals) }
+
+        edge_acc_series = gdf_poly.loc[gdf_poly["FID"] == fid, "EdgeAcc_m"]
+        if edge_acc_series.empty:
             continue
-        edge_acc_val = edge_acc.iloc[0]
+        edge_acc_val = edge_acc_series.iloc[0]
         sorted_d = np.sort(dists)
+
         if np.isnan(edge_acc_val):
             edge_perc = np.nan
-            edge_to_50p = np.nan
+            edge_to_map = { (f"EdgeTo{str(p).zfill(2)}p" if p < 100 else "EdgeTo100p"): np.nan for p in PERCENTILES }
         else:
             edge_perc = round(percentile_rank(edge_acc_val, sorted_d), 1)
-            p50 = p_map["p50"]
-            edge_to_50p = round(p50 / edge_acc_val, 4) if edge_acc_val > 0 else np.nan
+            # EdgeToXXp ratios
+            edge_to_map = {}
+            for p in PERCENTILES:
+                pname = f"p{str(p).zfill(2)}" if p < 100 else "p100"
+                rname = f"EdgeTo{str(p).zfill(2)}p" if p < 100 else "EdgeTo100p"
+                val = p_map[pname]
+                edge_to_map[rname] = round(val / edge_acc_val, 4) if edge_acc_val > 0 else np.nan
+
         rec = {
             "FID": fid,
             "EdgePerc": edge_perc,
-            "EdgeTo50p": edge_to_50p,
             "n_samples": int(dists.size)
         }
         rec.update(p_map)
+        rec.update(edge_to_map)
         records.append(rec)
+
         if idx % LOG_INTERVAL == 0:
             log_info(f"Processed {idx}/{total} FIDs for metrics...")
-            
     if not records:
         raise RuntimeError("No metrics computed (no valid distance groups).")
 
     metrics_df = pd.DataFrame(records)
-
-    # Drop polygons with no lines (left join restrict)
     merged = gdf_poly.merge(metrics_df, on="FID", how="inner")
     log_info(f"Merged metrics: {len(merged)} polygons retained (dropped {len(gdf_poly)-len(merged)} without lines).")
-
     return merged
 
 def load_inputs():
@@ -251,81 +255,91 @@ def load_inputs():
 
     return gdf_poly, gdf_lines
 
-def generate_plots(gdf_metrics):
-    """Create log-scale distribution (EdgeTo50p) and log-log scatter plots (EdgeAcc_m vs p20/p50/p80),
-       plus EdgeTo50p distributions by reef size classes (<0.1, 0.1–1, >1 km2) with lognormal fit."""
+def generate_plots(gdf_metrics, gdf_lines):
+    """Create log-scale ratio distributions (EdgeTo20p / EdgeTo50p / EdgeTo80p) with lognormal fits
+       (overall + size classes), log-log scatter plots (EdgeAcc_m vs p20/p50/p80),
+       and overall CDF of all DIST_M values."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    def plot_edge_to50p(series, title_suffix, filename_suffix):
+    def plot_edge_ratio(series, pct_label, title_suffix, filename_suffix):
+        """
+        Generic lognormal fit + histogram for an EdgeToXXp ratio series.
+        pct_label: string like '20', '50', '80'
+        """
         et = series.replace([np.inf, -np.inf], np.nan)
         et = et[(et > 0)].dropna()
         if et.empty:
-            log_warn(f"EdgeTo50p subset empty for {title_suffix}; plot skipped.")
+            log_warn(f"EdgeTo{pct_label}p subset empty for {title_suffix}; plot skipped.")
             return
         min_ratio = 0.05
         max_ratio = 5
         et_clipped = et[(et >= min_ratio) & (et <= max_ratio)]
         if et_clipped.empty:
-            log_warn(f"EdgeTo50p subset (after clipping {min_ratio}–{max_ratio}) empty for {title_suffix}; plot skipped.")
+            log_warn(f"EdgeTo{pct_label}p subset (after clipping {min_ratio}–{max_ratio}) empty for {title_suffix}; plot skipped.")
             return
 
-        # Fit lognormal (natural log)
         ln_vals = np.log(et_clipped)
         if ln_vals.size < 2:
-            log_warn(f"Not enough values to fit lognormal for {title_suffix}; plot skipped.")
+            log_warn(f"Not enough values to fit lognormal for EdgeTo{pct_label}p {title_suffix}; plot skipped.")
             return
-        mu = ln_vals.mean()              # MLE mu
-        sigma = ln_vals.std(ddof=0)      # MLE sigma
+        mu = ln_vals.mean()
+        sigma = ln_vals.std(ddof=0)
 
-        # Bins + histogram (density)
         bins = np.logspace(np.log10(min_ratio), np.log10(max_ratio), 40)
         plt.figure(figsize=(6,4))
         plt.hist(et_clipped, bins=bins, color="#2c7fb8", edgecolor="white", alpha=0.65, density=True)
 
-        # Lognormal PDF
         x_grid = np.logspace(np.log10(min_ratio), np.log10(max_ratio), 400)
         pdf = (1 / (x_grid * sigma * math.sqrt(2 * math.pi))) * np.exp(-((np.log(x_grid) - mu) ** 2) / (2 * sigma ** 2))
         plt.plot(x_grid, pdf, color="#d62728", lw=2, label="Lognormal fit")
 
         plt.xscale("log")
         plt.xlim(min_ratio, max_ratio)
-        plt.xlabel("EdgeTo50p (p50 / EdgeAcc_m) [log scale]")
+        plt.xlabel(f"EdgeTo{pct_label}p (p{pct_label} / EdgeAcc_m) [log scale]")
         plt.ylabel("Density")
-        plt.title(f"EdgeTo50p Distribution {title_suffix} ({min_ratio}–{max_ratio})")
+        plt.title(f"EdgeTo{pct_label}p Distribution {title_suffix} ({min_ratio}–{max_ratio})")
         plt.grid(alpha=0.3, which="both")
-
-        # Annotation
-        plt.text(0.98, 0.95,
-                 f"μ = {mu:.3f}\nσ = {sigma:.3f}",
-                 ha="right", va="top",
-                 transform=plt.gca().transAxes,
-                 fontsize=9,
-                 bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="#555", alpha=0.85))
+        plt.text(
+            0.98, 0.95,
+            f"μ = {mu:.3f}\nσ = {sigma:.3f}",
+            ha="right", va="top",
+            transform=plt.gca().transAxes,
+            fontsize=9,
+            bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="#555", alpha=0.85)
+        )
         plt.legend()
         plt.tight_layout()
-        plt.savefig(OUTPUT_DIR / f"EdgeTo50p_distribution{filename_suffix}.png", dpi=150)
+        plt.savefig(OUTPUT_DIR / f"EdgeTo{pct_label}p_distribution{filename_suffix}.png", dpi=150)
         plt.close()
 
-    # Overall distribution
-    plot_edge_to50p(gdf_metrics["EdgeTo50p"], "(All Reefs)", "")
+    # Percentile ratios to plot
+    ratio_specs = [
+        ("20", "EdgeTo20p"),
+        ("50", "EdgeTo50p"),
+        ("80", "EdgeTo80p"),
+    ]
 
-    # Size class plots (requires Area_km2)
+    # Overall + size classes
     if "Area_km2" in gdf_metrics.columns:
         areas = gdf_metrics["Area_km2"].astype(float)
-        masks = [
-            (areas < 0.1, "<0.1 km²", "_lt0p1"),
-            ((areas >= 0.1) & (areas <= 1.0), "0.1–1 km²", "_0p1_to_1"),
-            (areas > 1.0, ">1 km²", "_gt1")
+        size_classes = [
+            ("(All Reefs)", "", np.full(len(gdf_metrics), True, dtype=bool)),
+            ("(<0.1 km²)", "_lt0p1", areas < 0.1),
+            ("(0.1–1 km²)", "_0p1_to_1", (areas >= 0.1) & (areas <= 1.0)),
+            ("(>1 km²)", "_gt1", areas > 1.0),
         ]
-        for mask, label, suffix in masks:
-            subset = gdf_metrics.loc[mask, "EdgeTo50p"]
-            if subset.empty:
-                log_warn(f"No features in size class {label}; histogram skipped.")
-                continue
-            plot_edge_to50p(subset, f"({label})", suffix)
     else:
-        log_warn("Area_km2 field missing; size-class EdgeTo50p plots skipped.")
+        size_classes = [("(All Reefs)", "", np.full(len(gdf_metrics), True, dtype=bool))]
 
+    for pct_label, attr in ratio_specs:
+        if attr not in gdf_metrics.columns:
+            log_warn(f"{attr} missing; skipping EdgeTo{pct_label}p plots.")
+            continue
+        for title_suffix, file_suffix, mask in size_classes:
+            subset_series = gdf_metrics.loc[mask, attr]
+            plot_edge_ratio(subset_series, pct_label, title_suffix, f"{file_suffix}")
+
+    # Scatter plots (unchanged)
     def scatter_plot(percent_field, color):
         if percent_field not in gdf_metrics.columns:
             return
@@ -357,6 +371,36 @@ def generate_plots(gdf_metrics):
     scatter_plot("p50", "#d95f02")
     scatter_plot("p80", "#7570b3")
 
+    # --- Cumulative distribution of all match line distances (DIST_M) on log scale 3–2000 m ---
+    if "DIST_M" in gdf_lines.columns:
+        dist_series = pd.to_numeric(gdf_lines["DIST_M"], errors="coerce").dropna()
+        dist_series = dist_series[dist_series >= 0]
+        # Filter to target plotting domain
+        MIN_CDF = 3.0
+        MAX_CDF = 2000.0
+        dist_series = dist_series[(dist_series >= MIN_CDF) & (dist_series <= MAX_CDF)]
+        if not dist_series.empty:
+            d_sorted = np.sort(dist_series.to_numpy())
+            n = d_sorted.size
+            cdf_pct = np.linspace(0, 100, n, endpoint=False)
+            d_sorted = np.append(d_sorted, d_sorted[-1])
+            cdf_pct = np.append(cdf_pct, 100.0)
+            plt.figure(figsize=(6.5,4.2))
+            plt.plot(d_sorted, cdf_pct, color="#34495e", lw=1.8)
+            plt.xscale("log")
+            plt.xlim(MIN_CDF, MAX_CDF)
+            plt.xlabel("Error Distance (m, log scale)")
+            plt.ylabel("Cumulative percentage (%)")
+            plt.title("Cumulative Distribution of Boundary Error Distances (3–2000 m)")
+            plt.grid(alpha=0.35, which="both")
+            plt.tight_layout()
+            plt.savefig(OUTPUT_DIR / "DIST_M_CDF.png", dpi=150)
+            plt.close()
+        else:
+            log_warn("No DIST_M values within 3–2000 m; CDF plot skipped.")
+    else:
+        log_warn("DIST_M field not found in gdf_lines; CDF plot skipped.")
+
 def main():
     try:
         gdf_poly, gdf_lines = load_inputs()
@@ -367,15 +411,19 @@ def main():
     try:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         gdf_metrics = compute_metrics(gdf_poly, gdf_lines)
-        # Use canonical percentile field order
         metric_cols = [c for c in PERCENTILE_FIELDS if c in gdf_metrics.columns]
-        ordered = ["FID", "EdgeAcc_m"] + metric_cols + ["EdgePerc", "EdgeTo50p", "n_samples", "geometry"]
+        # EdgeToXXp columns derived from PERCENTILES (ensure ordering matches)
+        edge_to_cols = [
+            (f"EdgeTo{str(p).zfill(2)}p" if p < 100 else "EdgeTo100p")
+            for p in PERCENTILES if (f"EdgeTo{str(p).zfill(2)}p" if p < 100 else "EdgeTo100p") in gdf_metrics.columns
+        ]
+        ordered = ["FID", "EdgeAcc_m"] + metric_cols + edge_to_cols + ["EdgePerc", "n_samples", "geometry"]
         ordered = [c for c in ordered if c in gdf_metrics.columns]
         gdf_metrics[ordered].to_file(OUTPUT_SHP)
         log_info(f"Written metrics shapefile: {OUTPUT_SHP}")
 
-        # Generate plots
-        generate_plots(gdf_metrics)
+        # Generate plots (now passing gdf_lines for CDF)
+        generate_plots(gdf_metrics, gdf_lines)
         log_info("Plots written to output directory.")
     except Exception as e:
         log_error(f"Metric computation or write failed: {e}")
