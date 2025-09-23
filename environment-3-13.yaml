@@ -8,3 +8,4 @@ dependencies:
   - gdal=3.10.2
   - geopy=2.4.1
   - fiona=1.10.1
+  - matplotlib=3.9.*
