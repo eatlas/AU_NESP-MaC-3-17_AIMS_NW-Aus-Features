@@ -66,6 +66,8 @@ from tqdm import tqdm  # For progress indication
 warnings.filterwarnings("ignore", category=UserWarning)  # Suppress CRS mismatch warnings
 
 # Define all assessments to run
+# edge_acc_var is the name of the variable in the input shapefile that contains edge accuracy in meters. If
+# set to None there there is no attribute available.
 ASSESSMENTS = [
     
     {
@@ -73,35 +75,40 @@ ASSESSMENTS = [
         "input": "data/v0-1_dual-maps/Reef-mask_Ref2_EL/AU_AIMS_NESP-MaC-3-17_Rough-reef-shallow-mask_87hr.shp",
         "gtp": "working/21/NW-Aus-Features-v0-4_Boundary-error_RB.shp",
         "regions": "data/v0-4/in/validation/NW-Aus-Features-validation-regions.shp",
-        "output_dir": "working/22/v0-1-EL"
+        "output_dir": "working/V03/v0-1-EL",
+        "edge_acc_var": None
     },
     {
         "name": "V0-1 RB",
         "input": "data/v0-1_dual-maps/Reef-Features_Ref1_RB/Reef Boundaries RB.shp",
         "gtp": "working/21/NW-Aus-Features-v0-4_Boundary-error_RB.shp",
         "regions": "data/v0-4/in/validation/NW-Aus-Features-validation-regions.shp",
-        "output_dir": "working/22/v0-1-RB"
+        "output_dir": "working/V03/v0-1-RB",
+        "edge_acc_var": "Edg_acc"
     },
     {
         "name": "V0-2 merge",
         "input": "data/v0-2_merge-maps/Reef-boundaries-v0-2/Reef Boundaries Review RB.shp",
         "gtp": "working/21/NW-Aus-Features-v0-4_Boundary-error_RB.shp",
         "regions": "data/v0-4/in/validation/NW-Aus-Features-validation-regions.shp",
-        "output_dir": "working/22/v0-2"
+        "output_dir": "working/V03/v0-2",
+        "edge_acc_var": "Edg_acc"
     },
     {
         "name": "V0-3 qaqc",
         "input": "data/v0-3_qc-1/out/NW-Aus-Features_v0-3.shp",
         "gtp": "working/21/NW-Aus-Features-v0-4_Boundary-error_RB.shp",
         "regions": "data/v0-4/in/validation/NW-Aus-Features-validation-regions.shp",
-        "output_dir": "working/22/v0-3"
+        "output_dir": "working/V03/v0-3",
+        "edge_acc_var": "EdgeAcc_m"
     },
     {
         "name": "V0-4 qaqc",
         "input": "data/v0-4/out/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_v0-4.shp",
         "gtp": "working/21/NW-Aus-Features-v0-4_Boundary-error_RB.shp",
         "regions": "data/v0-4/in/validation/NW-Aus-Features-validation-regions.shp",
-        "output_dir": "working/22/v0-4"
+        "output_dir": "working/V03/v0-4",
+        "edge_acc_var": "EdgeAcc_m"
     }
 ]
 
@@ -135,66 +142,44 @@ def assign_regions(points_gdf, regions_shp):
     return points_with_regions
 
 
-def generate_matching_points(polygon_gdf, gtp_gdf):
+def generate_matching_points(polygon_gdf, gtp_gdf, edge_acc_var=None):
     """
     Generates matching points by finding the closest point on the nearest polygon boundary
-    for each point in gtp_gdf.
-
-    Parameters:
-        polygon_gdf (GeoDataFrame): GeoDataFrame containing the polygons.
-        gtp_gdf (GeoDataFrame): GeoDataFrame containing the ground truth points.
-
-    Returns:
-        match_gdf (GeoDataFrame): GeoDataFrame containing the matching points with IDs matching gtp_gdf.
+    for each point in gtp_gdf. Optionally extracts edge accuracy attribute.
     """
-    # Build spatial index for polygons
     polygon_gdf = polygon_gdf.reset_index(drop=True)
-    polygon_sindex = polygon_gdf.sindex  # Spatial index
-
-    # Prepare list to store matching points
+    polygon_sindex = polygon_gdf.sindex
     match_points = []
-
     print(f"Finding closest points for {len(gtp_gdf)} gtp points...")
 
-    
-
-    # Iterate over each gtp point with progress indication
     for idx, row in tqdm(gtp_gdf.iterrows(), total=gtp_gdf.shape[0], desc="Processing points"):
-        point = row.geometry  # Shapely Point object
-
-        # Use sindex.nearest to find the nearest polygon index
-        indices = polygon_sindex.nearest(
-            [point],
-            return_all=False,
-            max_distance=MAX_MATCH_DISTANCE_DEG,
-            return_distance=False,
-        )
-
+        point = row.geometry
+        indices = polygon_sindex.nearest([point], return_all=False, max_distance=MAX_MATCH_DISTANCE_DEG, return_distance=False)
         if len(indices[1]) == 0:
-            # Don't print because it will screw up the progress bar.
-            #print(f"No nearest polygon found within {MAX_MATCH_DISTANCE_DEG} degrees for point ID {row['ID']}")
             continue
-
-        # Get the index of the nearest polygon
         nearest_polygon_index = indices[1][0]
         nearest_polygon = polygon_gdf.geometry.iloc[nearest_polygon_index]
-
-        # Get the closest point on the boundary of the nearest polygon
-        boundary = nearest_polygon.boundary  # LineString or MultiLineString
-
-        # Use shapely's nearest_points function to find the exact closest point
+        boundary = nearest_polygon.boundary
         nearest_point = nearest_points(point, boundary)[1]
+
+        edge_acc_val = None
+        if edge_acc_var and edge_acc_var in polygon_gdf.columns:
+            try:
+                edge_acc_val = float(polygon_gdf.iloc[nearest_polygon_index][edge_acc_var])
+            except (ValueError, TypeError):
+                edge_acc_val = None
 
         match_points.append({
             "ValidID": row["ValidID"],
+            "PolyIdx": nearest_polygon_index,
+            "EdgeAcc_m": edge_acc_val,
             "geometry": nearest_point
         })
 
-    # Create a GeoDataFrame for the matching points
     match_gdf = gpd.GeoDataFrame(match_points, crs=gtp_gdf.crs)
     return match_gdf
 
-def calculate_distances_with_regions(polygon_shp, gtp_file, regions_shp, output_csv, match_points_shp):
+def calculate_distances_with_regions(polygon_shp, gtp_file, regions_shp, output_csv, match_points_shp, edge_acc_var=None):
     # Load the gtp points shapefile
     gtp_gdf = gpd.read_file(gtp_file)
 
@@ -207,7 +192,7 @@ def calculate_distances_with_regions(polygon_shp, gtp_file, regions_shp, output_
 
     # Generate the matching points
     print("Generating matching points by finding closest points on the nearest polygon boundary...")
-    match_gdf = generate_matching_points(polygon_gdf, gtp_gdf)
+    match_gdf = generate_matching_points(polygon_gdf, gtp_gdf, edge_acc_var=edge_acc_var)
 
     # Initialize results list
     results = []
@@ -226,6 +211,7 @@ def calculate_distances_with_regions(polygon_shp, gtp_file, regions_shp, output_
             "MatchLat": None,
             "MatchLon": None,
             "Error_m": None,
+            "EdgeAcc_m": None,
             "MatchFnd": False
         }
 
@@ -233,17 +219,15 @@ def calculate_distances_with_regions(polygon_shp, gtp_file, regions_shp, output_
         if not match_point.empty:
             match_coords = (match_point.iloc[0].geometry.y, match_point.iloc[0].geometry.x)
             distance_m = geodesic(gtp_coords, match_coords).meters
-
-            # Update the result and match_gdf
             result.update({
                 "MatchLat": match_coords[0],
                 "MatchLon": match_coords[1],
                 "Error_m": distance_m,
+                "EdgeAcc_m": match_point.iloc[0].get("EdgeAcc_m", None),
                 "MatchFnd": True
             })
             match_gdf.loc[match_gdf["ValidID"] == gtp_point["ValidID"], "Error_m"] = distance_m
 
-        # Append the result
         results.append(result)
 
     # Save the matching points with Error_m to a shapefile
@@ -468,6 +452,80 @@ def plot_all_assessment_cdfs(assessments, output_path):
     plt.close()
     print(f"All-assessment CDF plot saved to {output_path}")
 
+def generate_edge_accuracy_scatter(errors_gdf, output_path, shapefile_name):
+    """
+    Scatter plot: EdgeAcc_m vs Error_m (log-log), coloured by RegionName, with global log-log regression.
+    Adds:
+      - Diagonal y = x (feature edge accuracy equals boundary error).
+      - Percentage of points where Error_m > EdgeAcc_m.
+      - Regression power-law equation and R^2.
+    """
+    if "EdgeAcc_m" not in errors_gdf.columns:
+        return
+    df = errors_gdf.copy()
+    df = df[(df["EdgeAcc_m"].notna()) & (df["Error_m"].notna()) &
+            (df["EdgeAcc_m"] > 0) & (df["Error_m"] > 0)]
+    if df.empty or df["EdgeAcc_m"].nunique() < 2 or df["Error_m"].nunique() < 2:
+        print("Skipping edge accuracy scatter plot (insufficient data).")
+        return
+
+    # Compute exceedance percentage
+    pct_exceed = 100.0 * (df["Error_m"] > df["EdgeAcc_m"]).mean()
+    print(f"Percentage of points where boundary error exceeds edge accuracy: {pct_exceed:.1f}%")
+
+    plt.figure(figsize=(6.5, 5), dpi=200)
+    regions = df["RegionName"].fillna("Unknown").unique()
+    cmap = plt.cm.get_cmap("tab20", len(regions))
+    region_color = {r: cmap(i) for i, r in enumerate(regions)}
+
+    for r, g in df.groupby("RegionName"):
+        plt.scatter(g["EdgeAcc_m"], g["Error_m"],
+                    s=25, alpha=0.5, color=region_color[r],
+                    label=r, edgecolors='none')
+
+    # Log-log regression (power law)
+    log_x = np.log10(df["EdgeAcc_m"])
+    log_y = np.log10(df["Error_m"])
+    a, b = np.polyfit(log_x, log_y, 1)          # log10(y) = a*log10(x) + b
+    c = 10 ** b                                  # y = c * x^a
+    x_line = np.linspace(df["EdgeAcc_m"].min(), df["EdgeAcc_m"].max(), 200)
+    y_line = c * (x_line ** a)
+    plt.plot(x_line, y_line, color="red", linewidth=2, label="Log-log regression")
+
+    # R^2 in log space
+    log_y_pred = a * log_x + b
+    ss_res = np.sum((log_y - log_y_pred) ** 2)
+    ss_tot = np.sum((log_y - log_y.mean()) ** 2)
+    r2 = 1 - ss_res / ss_tot if ss_tot != 0 else np.nan
+
+    # Diagonal y = x (reference)
+    diag_min = min(df["EdgeAcc_m"].min(), df["Error_m"].min())
+    diag_max = max(df["EdgeAcc_m"].max(), df["Error_m"].max())
+    diag_x = np.array([diag_min, diag_max])
+    plt.plot(diag_x, diag_x, linestyle=":", color="black", linewidth=1.2, label="y = x")
+
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.xlabel("Feature edge accuracy (m)", fontsize=LABEL_FONTSIZE)
+    plt.ylabel("Boundary error (m)", fontsize=LABEL_FONTSIZE)
+    plt.title(f"Edge accuracy vs boundary error\n{shapefile_name}", fontsize=TITLE_FONTSIZE)
+
+    # Annotation (axes coordinates)
+    annotation = (f"y = {c:.2f} * x^{a:.2f}\n"
+                  f"R² = {r2:.2f}\n"
+                  f"Pct(Error > EdgeAcc) = {pct_exceed:.1f}%")
+    plt.text(0.03, 0.97, annotation, ha="left", va="top",
+             transform=plt.gca().transAxes, fontsize=10,
+             bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=4))
+
+    plt.legend(fontsize=LEGEND_FONTSIZE * 0.6, framealpha=0.9, ncol=2)
+    plt.grid(True, which="both", ls="--", linewidth=0.5)
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+    print(f"Edge accuracy scatter plot saved to {output_path}")
+
+
 if __name__ == "__main__":
     for assessment in ASSESSMENTS:
         print(f"Running assessment: {assessment['name']}")
@@ -477,14 +535,21 @@ if __name__ == "__main__":
         output_cdf = f"{assessment['output_dir']}/{base_filename}_error_cdf.png"
         match_points_shp = f"{assessment['output_dir']}/{base_filename}_match_pnts.shp"
         output_cdf_combined = f"{assessment['output_dir']}/{base_filename}_error_cdf_combined.png"
+        output_edge_acc_scatter = f"{assessment['output_dir']}/{base_filename}_edge-acc_vs_error.png"
+        output_edge_acc_scatter_linear = f"{assessment['output_dir']}/{base_filename}_edge-acc_vs_error_linear.png"
 
         distances_with_regions = calculate_distances_with_regions(
-            assessment["input"], assessment["gtp"], assessment["regions"], output_csv, match_points_shp
+            assessment["input"], assessment["gtp"], assessment["regions"],
+            output_csv, match_points_shp, edge_acc_var=assessment.get("edge_acc_var")
         )
         if distances_with_regions is not None:
             output_error_statistics_by_region(distances_with_regions)
             generate_cdf_by_regions(distances_with_regions, output_cdf, base_filename)
             generate_cdf_combined_with_regional_background(distances_with_regions, output_cdf_combined, base_filename)
-    # After all assessments, plot the CDFs for the 'All regions' for each assessment
+
+            # New scatter plot (only if edge accuracy attribute configured)
+            if assessment.get("edge_acc_var"):
+                generate_edge_accuracy_scatter(distances_with_regions, output_edge_acc_scatter, base_filename)
+                
     output_all_assessments_cdf = "working/22/all_assessments_error_cdf.png"
     plot_all_assessment_cdfs(ASSESSMENTS, output_all_assessments_cdf)
