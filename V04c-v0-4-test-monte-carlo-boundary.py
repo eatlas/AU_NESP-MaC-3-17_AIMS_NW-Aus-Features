@@ -66,7 +66,7 @@ SIGMA = 0.852
 MIN_RATIO = 0.05
 MAX_RATIO = 2.0
 
-DITHER_EDGE_ACC_RATIO = False  # if False use a fixed edge_acc_ratio. If False use Log-normal sampling. 
+DITHER_EDGE_ACC_RATIO = True  # if False use a fixed edge_acc_ratio. If False use Log-normal sampling. 
 FIXED_EDGE_ACC_RATIO = 1.0
 
 BASE_REEF_SHP = "working/V04a/NW-Aus-Feat_v0-4_RB_Type_L1_clip.shp"
@@ -79,47 +79,142 @@ LOG_INTERVAL = 100                # progress logging
 # Input / output (already defined above, keep constants as given)
 # MU, SIGMA, MIN_RATIO, MAX_RATIO, BASE_REEF_SHP, OUTPUT_SHP already declared in header
 
-def log_info(msg: str):
-    print(f"[INFO] {msg}")
+def generate_dithered_boundaries(
+    base_gdf: gpd.GeoDataFrame,
+    mu: float,
+    sigma: float,
+    min_ratio: float,
+    max_ratio: float,
+    use_lognormal: bool = True,
+    fixed_ratio: float = 1.0,
+    max_attempts: int = 10000,
+    log_interval: int = 100,
+    edge_acc_field: str = "EdgeAcc_m",
+    buffer_field: str = "Buffer_m",
+    area_field: str = "Area_km2",
+) -> gpd.GeoDataFrame:
+    """Generate a dithered (simulated) reef boundary layer based on per-feature edge accuracy.
 
-def log_warn(msg: str):
-    print(f"[WARN] {msg}", file=sys.stderr)
+    Parameters
+    ----------
+    base_gdf : GeoDataFrame
+        Input reef boundaries already projected to EPSG:3112 (required). Contains an edge
+        accuracy field (default 'EdgeAcc_m'). All values must be positive.
+    mu, sigma : float
+        Parameters of the log-normal distribution used to sample the edge accuracy ratio.
+    min_ratio, max_ratio : float
+        Hard clipping bounds for accepted sampled ratios (rejection sampling). Ensures
+        unrealistic extreme ratios are excluded.
+    use_lognormal : bool, default True
+        If True, sample ratios from log-normal distribution with rejection. If False,
+        a fixed_ratio is used for all features.
+    fixed_ratio : float, default 1.0
+        Ratio used when use_lognormal is False.
+    max_attempts : int, default 10000
+        Maximum rejection sampling iterations per feature before raising an error.
+    log_interval : int, default 100
+        Interval for progress printing during buffering.
+    edge_acc_field : str, default 'EdgeAcc_m'
+        Column name storing edge accuracy distances (meters).
+    buffer_field : str, default 'Buffer_m'
+        Column name to store the signed buffer distance applied (meters). Positive = outward,
+        negative = inward. Inward buffering can fully remove small polygons; such removals are
+        counted but not returned.
+    area_field : str, default 'Area_km2'
+        Column name for recalculated planar area (square kilometres) after dissolution.
 
-def log_error(msg: str):
-    print(f"[ERROR] {msg}", file=sys.stderr)
+    Returns
+    -------
+    GeoDataFrame
+        Dissolved (global) dithered reef boundaries with updated area field. EdgeAcc_m is the
+        maximum of contributing features; Buffer_m is the maximum absolute applied buffer among
+        merged members (sign retained from the member that had the max absolute value). Area_km2
+        is recomputed in planar CRS.
 
-def sample_ratio() -> float:
-    """Rejection sample a lognormal ratio within [MIN_RATIO, MAX_RATIO]."""
-    if not DITHER_EDGE_ACC_RATIO:
-        return FIXED_EDGE_ACC_RATIO
-    for _ in range(10000):
-        r = np.random.lognormal(mean=MU, sigma=SIGMA)
-        if MIN_RATIO <= r <= MAX_RATIO:
-            return r
-    raise RuntimeError("Failed to sample ratio within bounds after many attempts.")
+    Assumptions / Constraints
+    -------------------------
+    * Input CRS must be EPSG:3112 (asserted).
+    * All edge accuracy values are > 0.
+    * A global dissolve of touching/overlapping polygons is always performed.
+    * Attributes (other than EdgeAcc_m, Buffer_m, Area_km2) are aggregated: single unique value
+      retained, else semicolon-delimited list of unique values (stringified).
 
-def ensure_singleparts(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Explode to ensure no multipart geometries."""
-    return gdf.explode(index_parts=False, ignore_index=True)
-
-def dissolve_touching_all(buffered_gdf: gpd.GeoDataFrame,
-                          original_cols: list[str]) -> gpd.GeoDataFrame:
+    Notes
+    -----
+    "Inward removals" refer to cases where a randomly chosen inward buffer distance fully erodes
+    a polygon (e.g., small or narrow features). These features are simply skipped (dropped) from
+    the buffered set because they have zero area after buffering.
     """
-    Dissolve ALL touching/overlapping polygons (single global class) into separate
-    connected components. For each resulting component (polygon):
-      EdgeAcc_m = max of members
-      Buffer_m  = max of members
-      Area_km2  recomputed later
-      Other attributes:
-         * If single unique value -> that value
-         * Else -> semicolon-joined unique unique values
-    """
-    # Build global union (keeps disjoint parts as separate polygons inside MultiPolygon)
+    assert base_gdf.crs is not None, "Input GeoDataFrame must have a CRS."
+    # Accept both explicit EPSG code or string forms; safer to compare EPSG number if available.
+    epsg = None
+    try:
+        epsg = base_gdf.crs.to_epsg()
+    except Exception:
+        pass
+    if epsg is None:
+        # Fallback textual check
+        assert str(base_gdf.crs).endswith("3112"), "Input CRS must be EPSG:3112."
+    else:
+        assert epsg == 3112, f"Input CRS must be EPSG:3112, got EPSG:{epsg}."
+
+    # Column + value checks
+    assert edge_acc_field in base_gdf.columns, f"Missing required field '{edge_acc_field}'."
+    assert (base_gdf[edge_acc_field] > 0).all(), f"All '{edge_acc_field}' values must be > 0."
+
+    original_columns = list(base_gdf.columns)
+    # We'll add/overwrite buffer_field & ensure area_field later.
+
+    def sample_ratio_single() -> float:
+        if not use_lognormal:
+            return fixed_ratio
+        for _ in range(max_attempts):
+            r = np.random.lognormal(mean=mu, sigma=sigma)
+            if min_ratio <= r <= max_ratio:
+                return r
+        raise RuntimeError("Failed to sample ratio within bounds after many attempts.")
+
+    buffered_records = []
+    dropped_inward = 0
+
+    for idx, row in base_gdf.iterrows():
+        geom = row.geometry
+        edge_acc = float(row[edge_acc_field])
+        ratio = sample_ratio_single()
+        buf_dist = edge_acc * ratio
+        # Random inward / outward sign
+        signed_dist = -buf_dist if np.random.rand() < 0.5 else buf_dist
+        try:
+            new_geom = geom.buffer(signed_dist)
+        except Exception as e:
+            # Skip problematic geometry
+            print(f"[WARN] Buffer failed for feature {idx}: {e}", file=sys.stderr)
+            continue
+        if (new_geom is None) or new_geom.is_empty:
+            # inward erosion removed polygon completely
+            if signed_dist < 0:
+                dropped_inward += 1
+            continue
+        rec = {c: row[c] for c in original_columns if c != "geometry"}
+        rec[buffer_field] = signed_dist
+        rec["geometry"] = new_geom
+        buffered_records.append(rec)
+        if log_interval and (len(buffered_records) % log_interval == 0):
+            print(f"Buffered {len(buffered_records)} features (processed {idx+1}/{len(base_gdf)}) ...")
+
+    if not buffered_records:
+        raise ValueError("No buffered features produced (all removed or failed).")
+
+    buffered_gdf = gpd.GeoDataFrame(buffered_records, crs=base_gdf.crs)
+    # Ensure singlepart geometries
+    buffered_gdf = buffered_gdf.explode(index_parts=False, ignore_index=True)
+    print(f"Buffered features kept: {len(buffered_gdf)} (dropped inward removals: {dropped_inward})")
+
+    # --- Global dissolve of touching/overlapping features ---
     union_geom = unary_union(buffered_gdf.geometry.values)
     if union_geom.is_empty:
-        return gpd.GeoDataFrame(columns=original_cols, crs=buffered_gdf.crs)
+        raise ValueError("Union of buffered geometries is empty.")
 
-    # Collect component polygons
     if isinstance(union_geom, Polygon):
         parts = [union_geom]
     elif isinstance(union_geom, MultiPolygon):
@@ -127,21 +222,18 @@ def dissolve_touching_all(buffered_gdf: gpd.GeoDataFrame,
     else:
         parts = []
 
-    # Prepare spatial join pieces
     parts_gdf = gpd.GeoDataFrame({"geometry": parts}, crs=buffered_gdf.crs)
     parts_gdf["comp_id"] = range(len(parts_gdf))
-
     join = gpd.sjoin(buffered_gdf, parts_gdf, predicate="intersects", how="inner")
 
+    attr_cols = [c for c in set(buffered_gdf.columns) if c != "geometry"]
     out_rows = []
-    attr_cols = [c for c in original_cols if c != "geometry"]
-
     for cid, grp in join.groupby("comp_id"):
         comp_geom = parts_gdf.loc[parts_gdf["comp_id"] == cid, "geometry"].iloc[0]
 
         def agg_attr(col):
-            if col in ("EdgeAcc_m", "Buffer_m", "Area_km2"):
-                return None  # handled separately or recomputed
+            if col in (edge_acc_field, buffer_field, area_field):
+                return None
             vals = grp[col].dropna().unique().tolist()
             if not vals:
                 return None
@@ -151,124 +243,80 @@ def dissolve_touching_all(buffered_gdf: gpd.GeoDataFrame,
 
         row = {}
         for c in attr_cols:
-            if c == "EdgeAcc_m":
-                row[c] = float(grp["EdgeAcc_m"].max())
-            elif c == "Buffer_m":
-                row[c] = float(grp["Buffer_m"].max())
-            elif c == "Area_km2":
-                row[c] = None  # to be recalculated
+            if c == edge_acc_field:
+                row[c] = float(grp[edge_acc_field].max())
+            elif c == buffer_field:
+                # choose buffer distance with largest absolute magnitude; keep sign
+                bseries = grp[buffer_field]
+                idx_max = bseries.abs().idxmax()
+                row[c] = float(bseries.loc[idx_max])
+            elif c == area_field:
+                row[c] = None
             else:
                 row[c] = agg_attr(c)
         row["geometry"] = comp_geom
         out_rows.append(row)
 
-    return gpd.GeoDataFrame(out_rows, crs=buffered_gdf.crs)
+    dissolved = gpd.GeoDataFrame(out_rows, crs=base_gdf.crs)
+
+    # Recalculate area (planar) in km^2
+    areas = dissolved.geometry.area / 1e6
+    dissolved[area_field] = areas
+
+    return dissolved
 
 def main():
-    np.random.seed(RANDOM_SEED)
-
+    # Seed (if desired) managed outside the reusable function in Monte Carlo contexts.
     if not os.path.exists(BASE_REEF_SHP):
-        log_error(f"Input shapefile not found: {BASE_REEF_SHP}")
+        print(f"[ERROR] Input shapefile not found: {BASE_REEF_SHP}", file=sys.stderr)
         sys.exit(1)
 
-    log_info(f"Loading base reefs: {BASE_REEF_SHP}")
+    print(f"Loading base reefs: {BASE_REEF_SHP}")
     base = gpd.read_file(BASE_REEF_SHP)
     if base.empty:
-        log_error("Base reef layer is empty.")
+        print("[ERROR] Base reef layer is empty.", file=sys.stderr)
         sys.exit(1)
 
-    original_crs = base.crs
-    log_info(f"Original CRS: {original_crs}")
-
-    # Assertions
-    assert "EdgeAcc_m" in base.columns, "EdgeAcc_m field missing."
-    assert (base["EdgeAcc_m"] > 0).all(), "Found non-positive EdgeAcc_m values."
-
-    original_columns = list(base.columns)  # preserve all
-    # Project to planar CRS for buffering
+    # Ensure planar CRS (project if necessary then assert) for this script's workflow.
     if str(base.crs) != TARGET_CRS:
-        base_planar = base.to_crs(TARGET_CRS)
-    else:
-        base_planar = base
+        base = base.to_crs(TARGET_CRS)
+    # Function will assert EPSG:3112.
 
-    # Buffer each feature
-    buffered_records = []
-    dropped_inward = 0
-    for idx, row in base_planar.iterrows():
-        geom = row.geometry
-        edge_acc = float(row["EdgeAcc_m"])
-        ratio = sample_ratio()
-        buf_dist = edge_acc * ratio
-        # Random sign (inward/outward)
-        if np.random.rand() < 0.5:
-            signed_dist = -buf_dist
-        else:
-            signed_dist = buf_dist
-        try:
-            new_geom = geom.buffer(signed_dist)
-        except Exception:
-            log_warn(f"Buffer failed for index {idx}; feature skipped.")
-            continue
-        if (new_geom is None) or new_geom.is_empty:
-            # inward buffer completely removed geometry -> drop
-            if signed_dist < 0:
-                dropped_inward += 1
-            continue
-        rec = {c: row[c] for c in original_columns if c != "geometry"}
-        rec["Buffer_m"] = signed_dist  # record applied (signed) buffer distance
-        rec["geometry"] = new_geom
-        buffered_records.append(rec)
+    dissolved = generate_dithered_boundaries(
+        base_gdf=base,
+        mu=MU,
+        sigma=SIGMA,
+        min_ratio=MIN_RATIO,
+        max_ratio=MAX_RATIO,
+        use_lognormal=DITHER_EDGE_ACC_RATIO,
+        fixed_ratio=FIXED_EDGE_ACC_RATIO,
+        max_attempts=10000,
+        log_interval=LOG_INTERVAL,
+    )
 
-        if (len(buffered_records) % LOG_INTERVAL) == 0:
-            log_info(f"Buffered {len(buffered_records)} features (processed {idx+1}/{len(base_planar)})...")
-
-    if not buffered_records:
-        log_error("No buffered features produced.")
-        sys.exit(1)
-
-    buffered_gdf = gpd.GeoDataFrame(buffered_records, crs=base_planar.crs)
-
-    # Ensure singlepart
-    buffered_gdf = ensure_singleparts(buffered_gdf)
-    log_info(f"Buffered features kept: {len(buffered_gdf)} (dropped inward removals: {dropped_inward})")
-
-    # Dissolve touching features globally (no RB_Type_L1 dependency)
-    log_info("Dissolving touching features (global)...")
-    dissolved = dissolve_touching_all(buffered_gdf, buffered_gdf.columns.tolist())
-
-    # Recalculate Area_km2 in planar CRS
-    if "Area_km2" not in dissolved.columns:
-        dissolved["Area_km2"] = None
-    areas = dissolved.to_crs(TARGET_CRS).geometry.area / 1e6
-    dissolved["Area_km2"] = areas
-
-    # Reproject back to original CRS
-    if str(dissolved.crs) != str(original_crs):
-        dissolved_out = dissolved.to_crs(original_crs)
-    else:
-        dissolved_out = dissolved
-
-    # Output
+    # Output writing (already in planar CRS; if original CRS needed, adapt here).
     out_dir = os.path.dirname(OUTPUT_SHP)
     os.makedirs(out_dir, exist_ok=True)
-
-    # Overwrite
     if os.path.exists(OUTPUT_SHP):
         try:
             os.remove(OUTPUT_SHP)
         except Exception:
             pass
+    print(f"Writing output: {OUTPUT_SHP}")
+    dissolved.to_file(OUTPUT_SHP)
 
-    log_info(f"Writing output: {OUTPUT_SHP}")
-    dissolved_out.to_file(OUTPUT_SHP)
-
-    # Summary stats
-    ratios_abs = [abs(r["Buffer_m"]) / r["EdgeAcc_m"] for r in buffered_records if r["EdgeAcc_m"] > 0]
-    log_info(f"Sampled ratio count: {len(ratios_abs)}  "
-             f"mean={np.mean(ratios_abs):.3f}  median={np.median(ratios_abs):.3f}  "
-             f"min={np.min(ratios_abs):.3f}  max={np.max(ratios_abs):.3f}")
-
-    log_info("Done.")
+    # Basic ratios summary from dissolved layer (note: post-dissolve aggregation may differ
+    # slightly from per-feature pre-dissolve distribution used in comparative analyses).
+    if "EdgeAcc_m" in dissolved.columns and "Buffer_m" in dissolved.columns:
+        valid = dissolved[dissolved["EdgeAcc_m"] > 0]
+        if not valid.empty:
+            ratios = (valid["Buffer_m"].abs() / valid["EdgeAcc_m"]).to_numpy()
+            print(
+                f"Dissolved ratio stats (n={len(ratios)}): "
+                f"mean={np.mean(ratios):.3f} median={np.median(ratios):.3f} "
+                f"min={np.min(ratios):.3f} max={np.max(ratios):.3f}"
+            )
+    print("Done.")
 
 if __name__ == "__main__":
     main()
