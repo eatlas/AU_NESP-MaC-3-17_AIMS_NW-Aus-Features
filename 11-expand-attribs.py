@@ -1,5 +1,5 @@
 """
-Script: 11-v0-4-expand-attribs.py
+Script: 11-expand-attribs.py
 
 Purpose:
     This script processes a shapefile of reef and sandbank features from northern Australia,
@@ -14,9 +14,9 @@ Processing Steps:
        Attachment and DepthCat columns (semicolon-separated).
     3. For each feature in the shapefile:
         - Matches it to a row in the crosswalk table using:
-            * RB_Type_L3 (feature) == RB_Type_L3_v0-4 (crosswalk)
-            * Attachment (feature) in Attachment_v0-4 (crosswalk, supports multiple values)
-            * DepthCat (feature, defaulting to 'Shallow' if missing) in DepthCat_v0-4 (crosswalk, supports multiple values)
+            * RB_Type_L3 (feature) == RB_Type_L3_{RB_TYPE_VERSION} (crosswalk)
+            * Attachment (feature) in Attachment_{RB_TYPE_VERSION} (crosswalk, supports multiple values)
+            * DepthCat (feature, defaulting to 'Shallow' if missing) in DepthCat_{RB_TYPE_VERSION} (crosswalk, supports multiple values)
         - If a feature cannot be matched, it is collected for review.
     4. If any features are unmatched:
         - Saves these features to a separate shapefile for manual inspection and correction.
@@ -31,12 +31,12 @@ Processing Steps:
         - Saves the enriched dataset as a new shapefile.
 
 Inputs:
-    - Reef features shapefile: data/v0-4/in/Reef-Boundaries_v0-4_edit.shp
-    - Crosswalk table: data/v0-4/in/RB_Type_L3_crosswalk.csv
+    - Reef features shapefile: data/{version}/in/Reef-Boundaries_{version}_edit.shp
+    - Crosswalk table: data/{version}/in/RB_Type_L3_crosswalk.csv
 
 Outputs:
-    - Enriched features shapefile: working/11/NW-Features_v0-4.shp
-    - Unmatched features shapefile (if any): working/11/Feature-mismatched.shp
+    - Enriched features shapefile: working/{version}/11/NW-Features_{version}.shp
+    - Unmatched features shapefile (if any): working/{version}/11/Feature-mismatched.shp
 
 Notes:
     - Requires the 'fiona' engine for shapefile writing to support custom field lengths.
@@ -44,17 +44,26 @@ Notes:
     - Designed for use in the AIMS NESP 3.17 project for harmonizing reef boundary mapping data.
 """
 
+import configparser
 import os
 import pandas as pd
 import geopandas as gpd
 import numpy as np
 
+cfg = configparser.ConfigParser()
+cfg.read("config.ini")
+in_3p_path = cfg.get("general", "in_3p_path")
+version = cfg.get("general", "version")
+
 # Input/output paths
-INPUT_SHP = "working/10/NW-Aus-Features_v0-4.shp"
-#INPUT_SHP = "data/v0-4/in/Reef-Boundaries_v0-4_edit.shp"
-CROSSWALK_CSV = "data/v0-4/in/RB_Type_L3_crosswalk.csv"
-MISMATCHED_SHP = "working/11/Feature-mismatched.shp"
-OUTPUT_SHP = "working/11/NW-Features_v0-4.shp"
+INPUT_SHP = f"working/{version}/10/NW-Aus-Features_{version}.shp"
+#INPUT_SHP = f"data/{version}/in/Reef-Boundaries_{version}_edit.shp"
+CROSSWALK_CSV = f"data/{version}/in/RB_Type_L3_crosswalk.csv"
+MISMATCHED_SHP = f"working/{version}/11/Feature-mismatched.shp"
+OUTPUT_SHP = f"working/{version}/11/NW-Features_{version}.shp"
+
+# Version number of the classification scheme
+RB_TYPE_VERSION = "v0-4"
 
 # Output fields from crosswalk to add
 CROSSWALK_FIELDS = [
@@ -80,8 +89,10 @@ def main():
     print(f"  Loaded {len(crosswalk)} crosswalk rows.")
 
     # Prepare crosswalk for matching
-    crosswalk['DepthCat_v0-4_list'] = crosswalk['DepthCat_v0-4'].str.split(';').apply(lambda lst: [x.strip() for x in lst if x.strip()])
-    crosswalk['Attachment_v0-4_list'] = crosswalk['Attachment_v0-4'].str.split(';').apply(lambda lst: [x.strip() for x in lst if x.strip()])
+    crosswalk[f'DepthCat_{RB_TYPE_VERSION}_list'] = \
+        crosswalk[f'DepthCat_{RB_TYPE_VERSION}'].str.split(';').apply(lambda lst: [x.strip() for x in lst if x.strip()])
+    crosswalk[f'Attachment_{RB_TYPE_VERSION}_list'] = \
+        crosswalk[f'Attachment_{RB_TYPE_VERSION}'].str.split(';').apply(lambda lst: [x.strip() for x in lst if x.strip()])
 
     # Fill missing DepthCat with 'Shallow'
     gdf['DepthCat'] = gdf['DepthCat'].fillna('Shallow')
@@ -99,8 +110,8 @@ def main():
     # Build a lookup for fast matching (by RB_Type_L3_v0-4)
     crosswalk_lookup = {}
     for idx, row in crosswalk.iterrows():
-        key = row['RB_Type_L3_v0-4']
-        crosswalk_lookup.setdefault(key, []).append((idx, row['Attachment_v0-4_list'], row['DepthCat_v0-4_list']))
+        key = row[f'RB_Type_L3_{RB_TYPE_VERSION}']
+        crosswalk_lookup.setdefault(key, []).append((idx, row[f'Attachment_{RB_TYPE_VERSION}_list'], row[f'DepthCat_{RB_TYPE_VERSION}_list']))
 
     for i, feat in gdf.iterrows():
         key = feat['RB_Type_L3']
@@ -152,18 +163,49 @@ def main():
     print("Reprojecting to EPSG:4283 for output...")
     matched_gdf = matched_gdf.to_crs(epsg=4283)
 
-    # Determine max string lengths for schema
+    # --- Pre-schema diagnostics ---
+    print("Checking output dataframe structure...")
+    expected_fields = RETAIN_FIELDS + CROSSWALK_FIELDS + ['Area_km2']
+    issues_found = False
+
+    for field in expected_fields:
+        if field not in matched_gdf.columns:
+            print(f"  WARNING: Expected field '{field}' is missing from output dataframe.")
+            issues_found = True
+            continue
+        col = matched_gdf[field]
+        dtype = col.dtype
+        # Report non-standard string dtypes (StringDtype breaks fiona/infer_schema)
+        if isinstance(dtype, pd.StringDtype):
+            print(f"  WARNING: Field '{field}' has StringDtype instead of object — will convert.")
+            issues_found = True
+        # Report unexpected NAs in fields that should be fully populated
+        na_count = col.isna().sum()
+        if na_count > 0:
+            print(f"  WARNING: Field '{field}' has {na_count} NA value(s) out of {len(col)} rows.")
+            issues_found = True
+
+    if not issues_found:
+        print("  No issues detected.")
+
+    # Convert any StringDtype columns to plain object dtype for fiona compatibility
+    for col_name in matched_gdf.columns:
+        if isinstance(matched_gdf[col_name].dtype, pd.StringDtype):
+            matched_gdf[col_name] = matched_gdf[col_name].astype(object)
+
+    # --- Determine max string lengths for schema ---
     print("Determining field lengths for output schema...")
     schema = matched_gdf.schema if hasattr(matched_gdf, 'schema') else None
     properties = {}
     for field in RETAIN_FIELDS + CROSSWALK_FIELDS:
         if field in matched_gdf.columns:
-            if matched_gdf[field].dtype == object:
-                maxlen = matched_gdf[field].astype(str).map(len).max()
+            dtype = matched_gdf[field].dtype
+            if pd.api.types.is_string_dtype(dtype) or pd.api.types.is_object_dtype(dtype):
+                maxlen = matched_gdf[field].fillna('').astype(str).str.len().max()
                 properties[field] = f'str:{maxlen}'
-            elif matched_gdf[field].dtype == int or np.issubdtype(matched_gdf[field].dtype, np.integer):
+            elif pd.api.types.is_integer_dtype(dtype):
                 properties[field] = 'int'
-            elif matched_gdf[field].dtype == float or np.issubdtype(matched_gdf[field].dtype, np.floating):
+            elif pd.api.types.is_float_dtype(dtype):
                 properties[field] = 'float:24.15'
     # Area_km2
     properties['Area_km2'] = 'float:24.4'

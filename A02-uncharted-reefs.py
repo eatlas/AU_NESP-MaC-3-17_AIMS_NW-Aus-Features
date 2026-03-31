@@ -4,13 +4,19 @@ import configparser
 import geopandas as gpd
 import pandas as pd
 
+cfg = configparser.ConfigParser()
+cfg.read("config.ini")
+in_3p_path = cfg.get("general", "in_3p_path")
+version = cfg.get("general", "version")
+
 # Inputs
-L2_SHP = "working/12/NW-Features_v0-4_RB-Type-L2.shp"
-AHO_UNCHARTED_SHP = "data/v0-4/in/AHO-Uncharted/AHO-Uncharted-areas_2025.shp"
-REEFKIM_SHP = "data/v0-4/in-3p-mirror/WA_CU_WAMSI-2-1-3-1_ReefKIM/Reef_KIM.shp"
+L2_SHP = f"working/12/NW-Features_{version}_RB-Type-L2.shp"
+AHO_UNCHARTED_SHP = f"data/{version}/in/AHO-Uncharted/AHO-Uncharted-areas_2025.shp"
+REEFKIM_SHP = f"data/{version}/in-3p-mirror/WA_CU_WAMSI-2-1-3-1_ReefKIM/Reef_KIM.shp"
+AHS_REEFS_SHP = f"{in_3p_path}/AU_NESP-D3_AHS_Reefs/sbdare_a_reefs-only.shp"
 
 # Output
-OUT_SHP = "working/A02/NW-Features_v0-4_uncharted-reefs.shp"
+OUT_SHP = f"working/A02/NW-Features_{version}_uncharted-reefs.shp"
 
 # Target CRS per instruction
 TARGET_CRS = "EPSG:4283"
@@ -23,22 +29,15 @@ def fix_geoms(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty]
     return gdf
 
-def read_config_aho_reefs() -> str:
-    cfg = configparser.ConfigParser()
-    cfg.read("config.ini")
-    in_3p_path = cfg.get("general", "in_3p_path")
-    return os.path.join(in_3p_path, "AU_NESP-D3_AHO_Reefs", "sbdare_a_reefs-only.shp")
+
 
 def main():
     os.makedirs(os.path.dirname(OUT_SHP), exist_ok=True)
 
-    # Resolve AHO reefs path from config
-    aho_reefs_shp = read_config_aho_reefs()
-
     # Load layers
     l2 = gpd.read_file(L2_SHP)
     aho_uncharted = gpd.read_file(AHO_UNCHARTED_SHP)
-    aho_reefs = gpd.read_file(aho_reefs_shp)
+    aho_reefs = gpd.read_file(AHS_REEFS_SHP)
     reefkim = gpd.read_file(REEFKIM_SHP)
 
     # Clean and reproject to EPSG:4283

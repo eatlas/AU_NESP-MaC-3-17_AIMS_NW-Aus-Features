@@ -1,6 +1,131 @@
 # Map stage notes
 The following is a set of notes detailing the processing that was applied in the development of each phase of the mapping. This phased approach provides a record of what features were detected and mapped at each stage of the project, where each stage represents the incorporation of new information.
 
+
+# Stage 5 - v1-0
+2026-03-20:
+Improved rocky reefs just south of Shark Bay down to Gantheaume Bay. The main improvements were the trimming out of sandy areas from the inner portions of large rocky reefs, the trimming of the outer deep portion of the reef and checking the attributes of the features.
+
+Added depth classifications to the reefs around the Houtman Abrolhos regions and adjusted the boundaries around the houtman Abrolhos reefs. Separated out a large offshoot of the northern reef (Wallibi Group) and reclassified as a low reflied rocky reef. 
+
+There is a large reef feature off from Port Gregory that is about 9 km by 30 km in size. This feature contains ports of rocky reef and some paleo coastline. Many parts of this feature appear as though it might be some like of submerged aquatic vegetation as the sandy gaps seem to be aligned with the currents, with some of them having a chevron shape. The boundary between the rocky portions and the vegetation only portions can not be determined from the available imagery. For now we have left this feature as a low relief rocky reef.
+
+Improved the rocky reef mapping around Geraldton. The dredged shipping lane out from the port is reasonable evidence that the immediate surrounding seafloor is soft sediment and not rock. This indiciates that a low of the seafloor is covered in submerged vegetation that can not be easily distinguished from rocky reef.
+
+Mapping time: 8:50 - 11:00
+- 2 hr 10 min 10828 features, 2370 features with no depth category, 8458 features with a depth category.
+11:22 - 11:44
+- 22 min 10829 features
+
+2026-03-18:
+One pressing question is to determine the number of previously unmapped reefs that have been mapped as part of this project. One key goal of this project was to identify unmapped reefs. The challenge is to determine what constitutes as an unmapped reef. The key datasets that contain reef mapping for northern Australia are the UNEP Global Coral Reef dataset, ReefKIM covering the Kimberley, various habitat maps in the Pilbra, highlighted by Seamap Australia, marine charts, bathymetry surveys and the Allen Coral Atlas reef extents. Each of these data sources have strengths and weaknesses. The marine charts have variable levels of mapping detail, with the boundaries sometimes being only loosely related to the actual boundary. Additionally the marine charts correspond to a map of marine hazards, not reef boundaries. The Allen Coral Atlas reef extent has a very high error rate, where large areas are mapped as reef extents where there are no reefs. In somecase just whole areas are marked as reef. If our mapping identifies two reefs within that subset area are these newly mapped reefs, or does the messy mapping count. If it does then we could just draw a polygon over the whole marine estate and claim it as reef area, then proclaim that all the reefs have been mapped. This implies that accuracy is needed in order for the mapping to count. How accurate does the mapping need to be to count towards being about to say that the reef boundary was mapped? On the inshore reef on the GBR there were mapped reef boundaries that did not even overlap the reef feature at all, but the intention was clear due to the lack of any reefs near by. We therefore need to be quite generous and tolerant of positional errors in the mapping before we consider a reef to be too poorly mapped to be counted.
+
+If we have bathymetry data, how clear does the boundary need to be indicated for it to count. If we have a largely blank surrounding seafloor and a suggestive bump in the bathymetry, is that enough. Does it need to be resolved sufficiently that the approximate shape and size is reasonably accurate? What if we are looking at satellite derived bathymetry and the reef features are just about the noise, i.e. not a clear feature. 
+
+For the marine charts we need to consider the scale difference between the marine charts and the reef mapping. Often the marine chart will exaggerate the size of features to ensure that vessels do not come close to the harzard. As a result the marine charts are not a true representation of the size of features, but rather more like a buffered version of the features. 
+
+Does having the reef boundaries visible in satellite imagery count as the feature being mapped, even if no body has looked at the images. This argument is an extension of how well does the reef need to be represented in bathymetry to count as being mapped, even if not boundary has ever been draw around the feature. If someone creates a hill shade version of the bathymetry and the boundary of the feature is clearly visible in their maps, but no one has drawn a boundary around that feature then in some sense it is not mapped, but from a practical perspective it is mapped because it is clearly visible.
+
+To assess if a mapped reef feature can be considered as a newly mapped we need some reasonable criteria that we can assess each reef against. Some principles:
+1. The criteria should align with what most people would agree with as being a newly mapped reef. i.e. if you showed the existing evidence, a reasonable person would say that there was no reef in the map, and with the new evidence that there is now.
+2. The existing mapped feature does not count if it is produced from just noise in the data or a mapped area that far exceeds the size of the actual reef, with consideration for the scale of the mapping. This criteria basically indicates that the mapped feature must be intentionally related to the underlying reef being mapped.
+
+This work was capture in `A02-unmapped-reefs-spec.md` and `A02-unmapped-reefs.py`.
+
+2026-03-12:
+One limitation of the sand bank mapping is the line between what consitutes a sand bank and what is just part of the shallow fringing sediment connected to the coastline. Since our intention is to eventually mapping the shallow fringing sediment areas separately, the focus of the mapping of the sand banks is on isolated sand banks that are not connected to islands. Pretty much anything that would be a surprise to find. This is an imperfect approach and it will only be resolved when we map all the shallow sediment and integrate the two forms of shallow sediment mapping.
+
+When classifying small features (coral reefs and rocky reefs) that are near another fringing reef then we are classifying those features as also fringing if they are within 200 m of a nearby large fringing reef.
+
+Continued checking and fixing the `EdgeAcc_m` of features identified by having an `EAEWperc` greater than 50%. This will typically correspond to a small reef that has settings copied from a larger reef, leading to an `EdgeAcc_m` that is far too large. When checking we also reviewed neighbouring features, adding the DepthCat and checking the confidence settings. We also added sand banks and some small previously unmapped reefs. The review pass is complete from Houtman Abrolos through to Tiwi Island in Northern Territory. This quality control pass is only looking at a small percentage of the features, focused around areas highlighted with by `EAEWperc`. It looks like such a pass will take about 6 hours.
+
+Mapping time: 
+- 1 hr 30 min 10765 features, 2574 features with no depth category, 8191 features with depth category.
+- 1 hr 10 min 10798 features, 2546 features with no depth category
+
+## 2026-03-11:
+We adjusted `10-clip-land.py`, `11-expand-attribs.py` and `12-make-RB_Type_L2.py` to be version agnostic. We also adjusted the paths to the data files in `data/v1-0/*-v1-0.qgz` to work with the new paths that are all relative to `in-3p`. Running `10-clip-land.py` script on the v1-0 draft we found that it took 41 min to process. We improved the performance by adding spatial prefiltering prior to land clipping and parallel processing using threads. This speed up the processing significantly, reducing the run time to 4 min.
+
+Recalcuated the `EffWidth_m` and `EAEWperc` and used styling on `EAEWperc` to identify features with a likely too large `EdgeAcc_m`. Spent time improving the mapping around these features, then updated the `EdgeAcc_m` to a more accurate figure. I improved the boundaries of the reefs around Houtman Abrolhos. There are still quite a few marginal features on the bottom that are not mapped, that are likely low relief rocky reef, or vegetation. I also added some marginal low relief rocky reefs along the near shore of Eighty Mile Beach, and made significant adjustments to the reef boundaries around the islands 7.5 km west south west of Sir Fredrick Island in Kimberley. The reefs were covering areas that were significantly covered in sediment and so did not count as reefs. I have only reviewed the questionable `EAEWperc` from Houtman Abrolhos to half way up the Kimberley.
+Mapping time: 
+- 1hr 25 min 10747 features 
+
+## 2026-03-10:
+We adjusted the `01a-download-input-data.py` script to use the [data-downloader](https://github.com/open-AIMS/data-downloader/) library. We also included `01b-download-sentinel2.py` and `01c-create-virtual-raster.py` to allow the Sentinel 2 imagery used in the mapping to be downloaded and setup. We also added instructions to the readme for setting up symbolic links to the `in-3p` folder so that we can keep a fixed project relative path of `data/v1-0/in-3p` and have the contents of that folder actually stored elsewhere. This allows the project to be worked on in a Team area or One Drive area without the 3rd party datasets from being saved to One drive. 
+
+## 2026-01-1:
+Continued to check reef features with exceptionally high and low EAEWperc values.
+
+Fixed up fringing coral reef and rocky reefs around Bickerton Island and Groote Eylandt
+Time: 1 hr 10725 features
+Time: 0.5 hr 10727 features
+Time: 1 hr 10 min 10735 features
+
+## 2026-01-10:
+Improvements to rocky reefs and coral reef flats.
+Time: 30 min 10705 features
+Time: 10 min 10712 features
+
+To identify features that have their EdgeAcc_m poorly set we estimate the the EdgeAcc_m as a fraction of the Effective Width (width of a circle of the same area as the feature). This aims to identify features where the EdgeAcc_m is significantly high for their area. These errors can happen when the EdgeAcc_m was set to a cluster of reef features. To implement this extra attributes were added to Reef-boundaries_v1-0_Edit.shp. First we switch the projection to EPSG:3112 then use the FieldCalculator to add an integer field:
+EffWidth_m (int) - Effective Width in metres
+```
+2*sqrt( $area / 3.14)
+```
+
+EAEWperc (int) - Edge Accuracy to Effective Width ratio
+```
+("EdgeAcc_m" / "EffWidth_m") * 100
+```
+
+The EffWidth_m identified 9 features that have an effective width that is less than 10 m, indicating that they are almost certainly slivers. EAEWperc identified 149 features where the EdgeAcc_m is larger than the effective width of the features. There is also 119 features where the EAEWperc is less than 1 %. This indicates a high probability of a misattribution and that these features should be reviewed.
+
+Time: 1 hr 10702 features
+
+## 2026-01-08:
+Continued to add rocky reefs in the same area as yesterday.
+Time: 45 min 10686 features
+
+## 2026-01-07:
+Predominantly adding and improving the fringing rocky reef mapping along the northern Kimberley Coastline, north east of Bigge Island, south east of Bougain ville Peninsula. There are many many fringing intertidal rocky reefs in this area that have not previously been mapped. So far only a couple of them have been bigger than our target 150 m minimum feature width. I have been digitising at a scale of 1:5000 which results in a final map scale of approximately 1:50k.
+Time: 1 hr 10646 features
+Time: 17 min 10655 features
+
+## 2026-01-06:
+Focued on fixing up rocky reefs in the northern Kimberley region around Jungulu Island and on the Eastern side of Augustus Island. This involved triming existing reef boundaries to cater for the many fringing reefs then checking the rocky reefs in Google Earth. In most cases rocky reefs were considered when the rocks were approximately 1 m across in the high resolution imagery. Most of these islands are surrounded by rocky rubble fields with bolders in the order of 1 m across. Even though these bolders are not consolidated we consider them a rocky reef because of the high density of large rocks that should act as a complex 3D environment. There are many rocky features that are still to be corrected.
+We continued to focus on improving the rocky reef mapping in the Kimberley, working up to Bigge Island.
+
+Time: 1 hr 15 min 10529 features 
+Time: 8 min 10543 features
+Time: 23 min 10552 features
+Time: 1 hr 24 min 10608 features
+
+## 2026-01-05:
+We created a new layer to act as a depth proxy -("S2 All Tide@3" / "S2 All Tide@1") scaled between -1.35 to -1. This is effectively a rough satellite derived bathymetry. The minimum and maximum were scaled so that black roughly represents -10 m and white approximately -5 m. These depths were roughly calibrated for offshore sand banks in the southern Pilbra. This algorithm is highly affected by the water colour and so can only be used as a rough depth guide without local calibration. The goal was to help determine which sand banks should be digitised. A bonus of this depth estimator is that it highlighted a bunch of small (typically 50 m across) features in the North East of the Exmouth Gulf. These features that are barely visible showed as local high spots. There classification as rocky reefs or coral reefs was highly uncertain due to their small size and their poor visibility. 
+
+Time: 1.5 hr. v1-0 10455 features
+Time: 1 hr v1-0 10483
+
+## 2026-01-04:
+Updated \data\v1-0\in\AHO-Uncharted\AHO-Uncharted-areas_2025.shp to include a complete set of uncharted areas, including Torres Strait and along the Queensland coastline. This mapping of the uncharted areas only includes Queesland, Northern Territory and Western Australia north of Geraldton. Most of the features were digitised with an onscreen scale of 1:30k - 1:50k resulting in a final scale of approximately 1:200k. For seaward areas the boundary was made to match the existing boundary as accuractely as possible. Where boundaries touched land the landward boundary was made larger by 200 - 500 m to minimise the detail needed to represent the land boundary. The goal was that an accurate land boundary could be obtained by clipping the AHO-Uncharted-areas by a land mask. Where a boundary contain islands these were not removed as holes from the boundaries, again clipping by land can result in holes if this is needed. In some cases the boundaries pass under reef features at the edges. In most cases these reef features were not clipped out from the boundaries. The boundaries typically correspond to the simpliest shape that covered the area assuming the reef mapping is on top of the regions. The AHO-Uncharted-areas was developed to help determine the number of newly mapped reefs that fall within uncharted areas. For this analysis we would use the AHO reefs dataset to ensure we detect the reefs that are mapped within the uncharted areas.
+
+AHO reefs dataset:
+http://catalogue.aodn.org.au/geonetwork/srv/eng/metadata.show?uuid=f56d4f73-7444-4335-8c46-dce34db915f9
+Downloaded 17 April 2024
+From Collation of existing shelf reef mapping data and gap identification
+https://www.nespmarine.edu.au/system/files/Lucieer%20et%20al%20-%20Collation%20of%20existing%20shelf%20reef%20mapping%20data_Milestone_4_D3_RPv2_2016.pdf
+
+## Comparison between AHOENCSeries Marine charts and mapped reefs
+To help determine the false negative rate we reviewed the reef boundary mapping, digitised solely from satellite imagery, against the AHO Marine Charts. We review the marine charts for features raised above the seafloor, but at least 5 m, that were not already mapped as a reef. We then review the satellite imagery to determine if the feature could be detected in the imagery. Where the feature could be seen the feature was added to the Reef Boundaries dataset, recording the EdgeSrc as 'AHO, ...' to allow tracking of features that were added due to the assistance of the marine charts.Features were only added where they could be confirmed in the satellite imagery. This means that the dataset is still limited to the visible limit of the satellite imagery. Features were not copied from the AHO Marine Charts because the marine charts are a much lower resolution mapping resulting in the actual features being a significantly different shape to that shown in the marine chart. The main reason for not including marine chart features without confirmation from the satellite imagery is that the substrate type could not be determined, making if often impossible to tell the difference between a rise in the unconsolidated seafloor and a reef with a hard substrate. Only rise points where the peak was shallower than 40 m were reviewed as features deeper than this are generally not visible in the imagery.
+
+Comparision time: 1 hr
+
+## Misc changes
+The outer edge of Ningaloo Reef near Point Cloates was extended by 2 km to cover a deep reef region.
+
+
+2025-10-01:
+Started making small edits to the dataset to correct errors that arose during the development of the scripts for counting reefs. This typically corresponded to fixing slivers that were created as part of trimming the land from the reef boundaries.
+
 # Stage 4 - v0-4 - 2025-07-30
 In stage 3 the focus of the scripts was to merge all the datasets (sediment, automated intertidal rocky reefs, manual reef boundaries) into a final dataset where features don't have any overlaps. My original plan was to use this new output as the basis for further improvements in this stage. However, manual editing of this final dataset is difficult and we determined that there were issues with the clipping around the intertidal rocky reef that should be reprocessed. We therefore shifted to maintaining a set of editable layers that are then combined to create the final dataset. These editable layers are based on the original inputs to the stage 3 scripts, but with some of the corrections applied to them, prior to the next stage of manual editing. 
 

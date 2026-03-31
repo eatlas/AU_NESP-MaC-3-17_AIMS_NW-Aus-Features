@@ -17,12 +17,15 @@ Classification context
   of each reef/rocky reef at L2, rather than separate L3 parts.
 
 Processing overview
-1) Input: working/11/NW-Features_v0-4.shp (NW-only dataset produced by step 11).
+1) Input: working/{version}/11/NW-Features_{version}.shp (NW-only dataset produced by step 11).
 2) Validation:
    - Assert RB_Type_L2 is present and non-empty for all features.
    - Fail if Attachment, DepthCat, FeatConf, or TypeConf contain unexpected enum values.
 3) Geometry clean: fix topology using buffer(0).
-4) Dissolve by RB_Type_L2:
+4) Sliver repair: after dissolving each L2 group, apply buffer(+SLIVER_EPS).buffer(-SLIVER_EPS)
+   to close infinitely-thin holes and boundary cracks caused by floating-point precision errors
+   along the seams of adjacent features. SLIVER_EPS = 1e-6 degrees (~0.1 m at these latitudes).
+5) Dissolve by RB_Type_L2:
    - Build the unary union for each L2 class and explode into singlepart components so that each
      dissolved reef is a separate polygon.
    - For each singlepart component, aggregate attributes from the original L3 features that
@@ -36,12 +39,12 @@ Processing overview
        • FeatConf and TypeConf: take the lowest confidence across members (Very Low < Low < Medium < High).
        • EdgeAcc_m: take the maximum (worst) accuracy in metres.
    - Flag components where multiple Attachment values were merged (AttSet contains ';').
-5) Area: compute Area_km2 in EPSG:3112, round to 4 decimal places; keep output CRS unchanged (EPSG:4283).
-6) Outputs:
-   - Main dissolved singlepart features: working/12/NW-Features_v0-4_RB-Type-L2.shp
+6) Area: compute Area_km2 in EPSG:3112, round to 4 decimal places; keep output CRS unchanged (EPSG:4283).
+7) Outputs:
+   - Main dissolved singlepart features: working/{version}/12/NW-Features_{version}_RB-Type-L2.shp
      Fields include RB_Type_L2, RB_L3_Agg, Attachment, DepthCat, DepthCatSr, FeatConf, TypeConf,
      EdgeSrc, EdgeAcc_m, Area_km2, geometry.
-   - QA features with mixed Attachment values: working/12/multi-attachment-values.shp
+   - QA features with mixed Attachment values: working/{version}/12/multi-attachment-values.shp
      Contains the same attributes plus AttSet to aid debugging.
 
 Failure modes
@@ -49,15 +52,20 @@ Failure modes
 - Assertion error if enumerated fields contain unexpected values.
 """
 
+import configparser
 import os
 import geopandas as gpd
 import pandas as pd
 import numpy as np
 from shapely.ops import unary_union
-
-INPUT_SHP = "working/11/NW-Features_v0-4.shp"
-OUTPUT_SHP = "working/12/NW-Features_v0-4_RB-Type-L2.shp"
-MULTI_ATTACHMENT_SHP = "working/12/multi-attachment-values.shp"
+cfg = configparser.ConfigParser()
+cfg.read("config.ini")
+in_3p_path = cfg.get("general", "in_3p_path")
+version = cfg.get("general", "version")
+    
+INPUT_SHP = f"working/{version}/11/NW-Features_{version}.shp"
+OUTPUT_SHP = f"working/{version}/12/NW-Features_{version}_RB-Type-L2.shp"
+MULTI_ATTACHMENT_SHP = f"working/{version}/12/multi-attachment-values.shp"
 
 # Attachment priority rule (Land > Fringing > Oceanic > otherwise Isolated)
 ATT_PRIORITY = ["Land", "Fringing", "Oceanic"]
@@ -69,6 +77,11 @@ DEPTH_RANK = {v: i for i, v in enumerate(DEPTH_ORDER)}  # lower index = higher
 
 # Confidence order (worst to best ranking via numeric score)
 CONF_SCORE = {"Very Low": 0, "Low": 1, "Medium": 2, "High": 3}
+
+# Small buffer (degrees) used to close floating-point slivers/gaps after dissolve.
+# Applied as buffer(+eps).buffer(-eps): the outward pass seals sub-pixel holes along
+# internal seams; the inward pass restores the outer boundary to its original extent.
+SLIVER_EPS = 1e-6
 
 def unique_nonempty(values):
     vals = [str(v).strip() for v in values if pd.notna(v) and str(v).strip() != ""]
@@ -153,6 +166,8 @@ def dissolve_by_l2(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     out_parts = []
     for l2, grp in gdf.groupby("RB_Type_L2"):
         union_geom = unary_union(grp.geometry)
+        # Close floating-point slivers and boundary cracks produced by the dissolve.
+        union_geom = union_geom.buffer(SLIVER_EPS).buffer(-SLIVER_EPS)
         parts_gdf = gpd.GeoDataFrame(geometry=[union_geom], crs=gdf.crs).explode(index_parts=False).reset_index(drop=True)
         parts_gdf["part_id"] = range(len(parts_gdf))
 

@@ -30,15 +30,23 @@ import configparser
 import geopandas as gpd
 from tqdm import tqdm
 from shapely.validation import make_valid, explain_validity
+from shapely.prepared import prep
+from concurrent.futures import ThreadPoolExecutor
 import sys
+import configparser
+
+cfg = configparser.ConfigParser()
+cfg.read("config.ini")
+in_3p_path = cfg.get("general", "in_3p_path")
+version = cfg.get("general", "version")
 
 # ---- PATH CONSTANTS ----
-OUTPUT_DIR = 'working/10'
-INPUT_FILE = 'data/v0-4/in/Reef-Boundaries_v0-4_edit.shp'
-OUTPUT_FILE = f"{OUTPUT_DIR}/NW-Aus-Features_v0-4.shp"
-NONPOLY_INPUT_FILE = f"{OUTPUT_DIR}/NW-Aus-Features_v0-4_input_nonpolygons.shp"
-NONPOLY_CLIPPED_FILE = f"{OUTPUT_DIR}/NW-Aus-Features_v0-4_clipped_nonpolygons.shp"
-INVALID_GEOM_PATH = f"{OUTPUT_DIR}/NW-Aus-Features_v0-4_input_invalid.shp"
+OUTPUT_DIR = f'working/{version}/10'
+INPUT_FILE = f'data/{version}/in/Reef-Boundaries_{version}_edit.shp'
+OUTPUT_FILE = f"{OUTPUT_DIR}/NW-Aus-Features_{version}.shp"
+NONPOLY_INPUT_FILE = f"{OUTPUT_DIR}/NW-Aus-Features_{version}_input_nonpolygons.shp"
+NONPOLY_CLIPPED_FILE = f"{OUTPUT_DIR}/NW-Aus-Features_{version}_clipped_nonpolygons.shp"
+INVALID_GEOM_PATH = f"{OUTPUT_DIR}/NW-Aus-Features_{version}_input_invalid.shp"
 # coastline_file is built in main as it depends on config
 
 def apply_coastline_clipping(gdf, coastline_file):
@@ -145,11 +153,35 @@ def apply_coastline_clipping(gdf, coastline_file):
             except Exception:
                 return geom
     
-    # Perform the clipping with progress bar
-    print("Clipping features (removing land areas)...")
+    # Pre-filter: identify features that actually intersect the coastline
+    # Uses a prepared geometry for fast predicate testing against the
+    # actual coastline shape (not just its bounding box).
+    print("Pre-filtering features against coastline...")
+    prefilter_start = time.time()
+    prepared_coast = prep(coastline_union)
+    needs_clip_mask = gdf.geometry.apply(prepared_coast.intersects)
+    clip_count = needs_clip_mask.sum()
+    skip_count = len(gdf) - clip_count
+    print(f"Pre-filter completed in {time.time() - prefilter_start:.2f} seconds: "
+          f"{clip_count} features intersect coastline, {skip_count} skipped")
+    
+    # Clip intersecting features using a thread pool for parallelism.
+    # Shapely 2.x releases the GIL during GEOS operations, so threads
+    # achieve true parallelism without serialisation overhead.
+    print(f"Clipping {clip_count} features using thread pool...")
     clip_start_time = time.time()
-    tqdm.pandas(desc="Clipping features")
-    gdf['geometry'] = gdf.geometry.progress_apply(clip_geometry)
+    
+    geoms_to_clip = gdf.loc[needs_clip_mask, 'geometry'].tolist()
+    indices_to_clip = gdf.loc[needs_clip_mask].index
+    
+    with ThreadPoolExecutor() as executor:
+        results = list(tqdm(
+            executor.map(clip_geometry, geoms_to_clip),
+            total=len(geoms_to_clip),
+            desc="Clipping features"
+        ))
+    
+    gdf.loc[indices_to_clip, 'geometry'] = results
     print(f"Clipping completed in {time.time() - clip_start_time:.2f} seconds")
     
     # Remove any features that became empty after clipping
@@ -194,11 +226,7 @@ def main():
     start_time = time.time()
     print("Starting coastline clipping process...")
     
-    # Load configuration
-    config = configparser.ConfigParser()
-    config.read('config.ini')
-    download_path = config.get('general', 'in_3p_path')
-    coastline_file = f"{download_path}/AU_AIMS_Coastline_50k_2024/Split/AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_split.shp"
+    coastline_file = f"{in_3p_path}/AU_AIMS_Coastline_50k_2024/Split/AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_split.shp"
 
     # Check if output file is locked
     if check_file_locked(OUTPUT_FILE):

@@ -53,16 +53,55 @@ cd AU_NESP-MaC-3-17_AIMS_NW-Aus-Features
 1. Create the Conda environment. This step can take 10 min. If you are using Anaconda open the default Anaconda Prompt, change to the 
     ```bash
     cd {path to the AU_NESP-MaC-3-17_AIMS_NW-Aus-Features dataset} 
-    conda env create -f environment-3-13.yaml
+    conda env create -f environment.yml
     ```
 2. Activate the environment
     ```bash
-    conda activate venv_map_3-13
+    conda activate nw-aus-feat-env
     ```
 
 ## 4. Editing in QGIS
-If you are making a new version of the dataset then you should start with the previous 'edit' version, not the final processed version. For example for v0-4 we needed to adjust the classification so `09-v0-4-class-cross-walk.py` was used to read `working/02/Reef_Boundaries_Clean.shp`, the previous editable version of the dataset. `v0-3` release didn't have a editable version because it focused on merging datasets together. This script created saved the conversion to `working/09/Reef-Boundaries_v0-4.shp`, which was manually copied to `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp`. This manual copy was done to prevent an accidental overwrite of any manual edits if the script was run once again. `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp` was then manually edited in QGIS to fix issues in the previous version. This shapefile is the current editable version. The final data file `data/v0-4/out/NW-Aus-Features_v0-4.shp` is derived from the edit version, by running `10-v0-4-clip-land.shp`.
-    
+If you are making a new version of the dataset then you should start with the previous 'edit' version, not the final processed version. 
+### v0-4
+For v0-4 we needed to adjust the classification so `09-v0-4-class-cross-walk.py` was used to read `working/02/Reef_Boundaries_Clean.shp`, the previous editable version of the dataset. `v0-3` release didn't have a editable version because it focused on merging datasets together. This script created saved the conversion to `working/09/Reef-Boundaries_v0-4.shp`, which was manually copied to `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp`. This manual copy was done to prevent an accidental overwrite of any manual edits if the script was run once again. `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp` was then manually edited in QGIS to fix issues in the previous version. This shapefile is the current editable version. The final data file `data/v0-4/out/NW-Aus-Features_v0-4.shp` is derived from the edit version, by running `10-v0-4-clip-land.shp`.
+
+### v1-0 process notes
+We startd with copying over the `data/v0-4/` to `data/v1-0`. We updated the paths in the QGIS files to fix path dependencies.
+1. Make sure that you have all the existing data by running `01a-download-input-data.py`, `01b-download-sentinel2.py` and `01c-create-virtual-rasters.py`
+2. Make a copy of the of the `data/{previous version}` to `data/{new version}`
+3. Rename `data/{new version}/in/Reef-Boundaries_{previous version}_edit.shp` to `data/{new version}/in/Reef-Boundaries_{new version}_edit.shp`
+4. Update `config.ini` with the new version number.
+5. Increment the version number of all the QGIS files in `data/{new version}`. Open each of these files and fix any broken links, making sure the version links are correct.
+6. Open `data/{new version}/NWF1-working-maps-v1-0.qgz` and switch the reef editing layer ()`Reef-Boundaries_{version}_edit`) across to the new version. 
+7. Make the edits required to the dataset to improve it.
+8. Using a Python terminal with the conda evnironment setup convert the editing reef boundaries into the output file. This process clips the features against land (`10-clip-land.py`), expands the attributes using the cross walk (`11-expand-attribs.py`), then make the RB Type L2 version (`12-make-RB_Type_L2.py`). 
+
+
+## Moving the 3rd party data download out of One Drive using a Symbolic link (Windows)
+
+The development of this dataset and the production of the preview maps relies on a bunch of third party datasets. These are large files as a result you may wish for them to be downloaded to a separate location to the default used in this repository. For example you may want to work on this dataset in Teams or on One Drive, but not have the third party data saved in these locations. 
+
+To prevent the QGIS links and code files from breaking we used a fixed location for the third party data, `data\{version}\in-3p\`. By default the data download will save all third party data to this folder and all other files will expect to find the datasets with that root path. To move the data outside this location use a directory symbolic link.
+
+For this we use a symbolic link, rather than a junction because using a junction will cause OneDrive to sync the linked content.
+
+1. Open a command prompt with administrator privledges.
+Click Start, type `cmd`, select Run as administrator. You’ll get the UAC prompt.
+2. Using a windows command prompt make sure up are in the data folder of the project
+```batch
+cd <path to project>\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features\data\v1-0
+```
+3. Create the symbolic link to work the data is stored. You probably need to ensure this folder exists first (untested)
+```batch
+mklink /D "in-3p" "C:\data-3p\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features\in-3p"
+```
+
+If you can't setup a symbolic link and still want to store the data in a separate folder then you can simple editing the paths in scripts and the paths in the QGIS preview-maps.qgz.
+
+### Removing the link
+
+Deleting the link does **not** delete the data: `rmdir in-3p`. Only the symbolic link is removed.
+
 ## Debug:
 ERROR conda.core.link:_execute(938): An error occurred while installing package 'conda-forge::libjpeg-turbo-3.0.0-hcfcfb64_1'.
 Rolling back transaction: done
@@ -74,7 +113,7 @@ For some reason this particular cache of the library was set with administrator 
 
 I found that when this failure occurs the resulting conda environment ends up in a corrupted state and it must be manually removed, prior to recreating the environment.
 
-In my case I needed to delete `C:\Users\elawrey\Anaconda3\envs\venv_map_3-13`
+In my case I needed to delete `C:\Users\elawrey\Anaconda3\envs\nw-aus-feat-env`
 
 # Description of scripts
 
@@ -121,7 +160,7 @@ Downloads required third‑party public datasets and previous version inputs (in
 - **`11-v0-4-expand-attribs.py`**
 Adds external classification scheme fields (e.g. NVCL, Seamap, Wetlands) to the edited v0-4 features via a crosswalk and recalculates area and EdgeAcc_m types, outputting a harmonised publication-ready shapefile.
 
-- **`12-v0-4-make-RB_Type_L2.py`**
+- **`12-make-RB_Type_L2.py`**
 Dissolves edited v0-4 features to RB_Type_L2 extents, aggregating L3 attributes and deriving representative Attachment, DepthCat, confidence, and edge accuracy metrics per dissolved reef polygon.
 
 - **`V01-v0-4-generate-validation-locations.py`**
@@ -142,7 +181,7 @@ Validation: Aggregates sampled match-line distances per reef to derive full boun
 - **`V04c-v0-4-test-monte-carlo-boundary.py`**
 Validation: Generates simulated (dithered) reef boundaries via stochastic buffering using EdgeAcc_m-derived log-normal ratios to test Monte Carlo boundary uncertainty modelling.
 
-- **`A02-v0-4-uncharted-reefs.py`**
+- **`A02-uncharted-reefs.py`**
 Analysis: Identifies coral and rocky reef features within AHO uncharted areas that are not present in AHO reef or ReefKIM datasets to flag potentially uncharted reefs.
 
 - **`20a-download-qaqc-data.py` - Unused**
@@ -150,6 +189,24 @@ Downloads additional datasets for quality assurance and quality control (QAQC). 
 
 - **`20d-compare-reef-masks.py` - Unused**
 Compares manual and automated reef masks to evaluate true positives, false positives, and false negatives.
+
+## Notes on making a new version of this dataset
+From time to time this dataset will be improved, making a new version of the dataset. The following are notes on what is needed to be setup when making a new version. Note: This list is not exhaustive and was written mid-way through the development of v1-0 and so is not tested end-to-end.
+1. Make sure that you have downloaded `data/{current version}` by running `01a-download-input-data.py`. 
+1. Make sure there is a release and tag in GitHub for the current version before you start modifying the code. We might have forgotten to set this up during the previous publication.
+2. Rename `data/{current version}` to `data/{new version}`. 
+3. Update the version number in `data/in/Reef-Boundaries_{version}_edit.shp`. This will now be the file that we edit to make the new version of the dataset.
+4. Rename `data/{new version}/*-{current version}.qgz` to have the new version number. Open each of these in QGIS and update the broken links to the change in the version number.
+5. Edit `config.ini` and change the `version` and `in_3p_path` to match the new version.
+6. Create a new entry in CHANGELOG.md to record a summary of all the modifications for this version.
+7. Run `10-clip-land.py`, `11-expand-attribs.py` and `12-make-RB_Type_L2.py` to determine whether the pipeline works before making changes to the dataset.
+
+### Errors and problems
+The following errors and problems can occur when making a new version of the dataset.
+
+#### Running `10-clip-land.py`: ValueError: Input GeoDataFrame contains 1 invalid geometries.
+This indicates that one of the adjusted features has a cross over in its polygons. Open the input_invalid shapefile in QGIS to determine the problem location.
+![Screen shot of using QGIS to view the working/v1-0/10/NW-Aus-Features_v1-0_input_invalid.shp to identify the feature with the invalid geometry then editing the Reef-Boundaries_v1-0.shp to correct the problem. The arrow indicates the geometry problem](media/qgis-correcting-invalid-geometry.png)
 
 ## Validation sampling
 To provide a basic level of validation to the dataset we perform an expert review of a random sample of reef features, looking to answer the following key questions:
