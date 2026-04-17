@@ -60,7 +60,7 @@ INPUT_SHP = f"working/{version}/10/NW-Aus-Features_{version}.shp"
 #INPUT_SHP = f"data/{version}/in/Reef-Boundaries_{version}_edit.shp"
 CROSSWALK_CSV = f"data/{version}/in/RB_Type_L3_crosswalk.csv"
 MISMATCHED_SHP = f"working/{version}/11/Feature-mismatched.shp"
-OUTPUT_SHP = f"working/{version}/11/NW-Features_{version}.shp"
+OUTPUT_SHP = cfg.get("paths", "current_processed")
 
 # Version number of the classification scheme
 RB_TYPE_VERSION = "v0-4"
@@ -133,14 +133,15 @@ def main():
 
     # If mismatches, save and abort
     if mismatched_indices:
-        print("Saving mismatched features for review...")
+        print("Saving crosswalk mismatched features for review...")
         mismatched_gdf = gdf.iloc[mismatched_indices]
         os.makedirs(os.path.dirname(MISMATCHED_SHP), exist_ok=True)
         mismatched_gdf.to_file(MISMATCHED_SHP)
         print(f"  Mismatched features saved to {MISMATCHED_SHP}")
         print("Summary of mismatches (by RB_Type_L3, Attachment, DepthCat):")
         print(mismatched_gdf.groupby(['RB_Type_L3', 'Attachment', 'DepthCat']).size())
-        print("Aborting further processing due to mismatches.")
+        print("------------------------------------------------")
+        print("ERROR:Aborting further processing due to mismatches.")
         return
 
     # Prepare output dataframe
