@@ -71,15 +71,9 @@ If you are making a new version of the dataset then you should start with the pr
 For v0-4 we needed to adjust the classification so `09-v0-4-class-cross-walk.py` was used to read `working/02/Reef_Boundaries_Clean.shp`, the previous editable version of the dataset. `v0-3` release didn't have an editable version because it focused on merging datasets together. This script created saved the conversion to `working/09/Reef-Boundaries_v0-4.shp`, which was manually copied to `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp`. This manual copy was done to prevent an accidental overwrite of any manual edits if the script was run once again. `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp` was then manually edited in QGIS to fix issues in the previous version. This shapefile is the current editable version. The final data file `data/v0-4/out/NW-Aus-Features_v0-4.shp` is derived from the edit version, by running `10-v0-4-clip-land.py`.
 
 ### v1-0 process notes
-We started with copying over the `data/v0-4/` to `data/v1-0`. We updated the paths in the QGIS files to fix path dependencies. The following are notes for setting up a new version of the dataset.
-1. Make sure that you have all the existing data by running `01a-download-input-data.py`, `01b-download-sentinel2.py` and `01c-create-virtual-rasters.py`
-2. Make a copy of the of the `data/{current version}` to `data/{new version}`
-3. Rename `data/{new version}/in/Reef-Boundaries_{current version}_edit.shp` to `data/{new version}/in/Reef-Boundaries_{new version}_edit.shp`
-4. Update `config.ini` with the new version number.
-5. Increment the version number of all the QGIS files in `data/{new version}`. Open each of these files and fix any broken links, making sure the version links are correct. 
-6. Open `data/{new version}/NWF1-working-maps-{current version}.qgz` and switch the reef editing layer (`Reef-Boundaries_{version}_edit`) across to the new version. 
-7. Make the edits required to the dataset to improve it.
-8. Using a Python terminal with the conda environment setup convert the editing reef boundaries into the output file. This process clips the features against land (`10-clip-land.py`), expands the attributes using the cross walk (`11-expand-attribs.py`), then make the RB Type L2 version (`12-make-RB_Type_L2.py`). 
+We started with copying over the `data/v0-4/` to `data/v1-0`. We updated the paths in the QGIS files to fix path dependencies. We then made edits to the `Reef-Boundaries_v1-0_edit.shp` dataset, recording progress in the `CHANGELOG.md`. The final output products were made using `10-clip-land.py`, `11-expand-attribs.py` and `12-make-RB_Type_L2.py`. Analysis of the changes were done using `A02-unmapped-reefs.py`, `A02b-tier1-overlap-analysis.py` and `A03-version-changes.py`. 
+
+If you were to start from scratch from this version then you would download the repo, run 01a, 01b, 01c, then remake the outputs by running scripts 10, 11, and 12. Scripts 02, 03, 04, 05, 06, 07, 08, and 09 are only relevant to earlier datasets and are provided as documentation of the history of the processing.
 
 
 ## Moving the 3rd party data download out of One Drive using a Symbolic link (Windows)
