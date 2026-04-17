@@ -34,6 +34,7 @@ import pandas as pd
 SAVE_DEBUG_SHP = False  # If true save rough_platform_reefs and auto_platform_reefs
 
 def main():
+    print("WARNING: This script is not yet used. It is a work in progress and may not be fully functional. Use with caution.")
     parser = argparse.ArgumentParser(description='Compare Shallow-mask and rough-reef-mask shapefiles to identify false positives and negatives in platform reefs.')
     #parser.add_argument('--region', type=str, default='NorthernAU', help="Region to process.")
     parser.add_argument('--sensitivity', type=str, default='Medium', 
