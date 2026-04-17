@@ -143,6 +143,23 @@ downloader.download_and_unzip(direct_download_url, 'AU_GA_AMB2020', flatten_dire
 direct_download_url = 'https://data.imas.utas.edu.au/attachments/f56d4f73-7444-4335-8c46-dce34db915f9/sbdare_a.zip'
 downloader.download_and_unzip(direct_download_url, 'AU_NESP-D3_AHS_Reefs', flatten_directory = True)
 
+# --------------------------------------------------------
+# Natural Earth. (2025). Natural Earth 1:50m Physical Vectors - Land [Shapefile]. https://www.naturalearthdata.com/downloads/50m-physical-vectors/50m-land/
+downloader.download_and_unzip(
+    'https://naciscdn.org/naturalearth/50m/physical/ne_50m_land.zip',
+    'natural-earth-land-50m',
+    flatten_directory=True
+)
+
+# --------------------------------------------------------
+# Natural Earth. (2025). Natural Earth 1:50m Admin 0 – Countries [Shapefile]. https://www.naturalearthdata.com/downloads/50m-cultural-vectors/
+# https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/50m/cultural/ne_50m_admin_0_countries.zip
+downloader.download_and_unzip(
+    'https://naciscdn.org/naturalearth/50m/cultural/ne_50m_admin_0_countries.zip',
+    'natural-earth-admin-0-countries-50m',
+    flatten_directory=True
+)
+
 
 # --------------------------------------------------------
 # Download the input and output dataset for the current version of the dataset.  This will all download in-3p-mirror
@@ -152,4 +169,6 @@ downloader.download_and_unzip(direct_download_url, 'AU_NESP-D3_AHS_Reefs', flatt
 downloader.download_path = 'data'
 direct_download_url = f'https://nextcloud.eatlas.org.au/s/ZbxtYci3A6WYnHc/download?path=%2F{version}'
 downloader.download_and_unzip(direct_download_url, version, flatten_directory=True)
+
+
 
