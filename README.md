@@ -71,9 +71,9 @@ If you are making a new version of the dataset then you should start with the pr
 For v0-4 we needed to adjust the classification so `09-v0-4-class-cross-walk.py` was used to read `working/02/Reef_Boundaries_Clean.shp`, the previous editable version of the dataset. `v0-3` release didn't have an editable version because it focused on merging datasets together. This script created saved the conversion to `working/09/Reef-Boundaries_v0-4.shp`, which was manually copied to `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp`. This manual copy was done to prevent an accidental overwrite of any manual edits if the script was run once again. `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp` was then manually edited in QGIS to fix issues in the previous version. This shapefile is the current editable version. The final data file `data/v0-4/out/NW-Aus-Features_v0-4.shp` is derived from the edit version, by running `10-v0-4-clip-land.py`.
 
 ### v1-0 process notes
-We started with copying over the `data/v0-4/` to `data/v1-0`. We updated the paths in the QGIS files to fix path dependencies. We then made edits to the `Reef-Boundaries_v1-0_edit.shp` dataset, recording progress in the `CHANGELOG.md`. The final output products were made using `10-clip-land.py`, `11-expand-attribs.py` and `12-make-RB_Type_L2.py`. Analysis of the changes were done using `A02-unmapped-reefs.py`, `A02b-tier1-overlap-analysis.py` and `A03-version-changes.py`. 
+We started with copying over the `data/v0-4/` to `data/v1-0`. We updated the paths in the QGIS files to fix path dependencies. See section 'Notes on making a new version of this dataset' for more details on setting up a new version. We then made edits to the `Reef-Boundaries_v1-0_edit.shp` dataset, recording progress in the `CHANGELOG.md`. The final output products were made using `10-clip-land.py`, `11-expand-attribs.py` and `12-make-RB_Type_L2.py`. Analysis of the changes were done using `A02-unmapped-reefs.py`, `A02b-tier1-overlap-analysis.py` and `A03-version-changes.py`. 
 
-If you were to start from scratch from this version then you would download the repo, run 01a, 01b, 01c, then remake the outputs by running scripts 10, 11, and 12. Scripts 02, 03, 04, 05, 06, 07, 08, and 09 are only relevant to earlier datasets and are provided as documentation of the history of the processing.
+If you were to start from scratch from this version then you would download the repo, run 01a, 01b, 01c, then remake the outputs by running scripts 10, 11, and 12. Scripts 02, 03, 04, 05, 06, 07, 08, and 09 are only relevant to earlier versions of the dataset and are provided as documentation of the history of the processing.
 
 
 ## Moving the 3rd party data download out of One Drive using a Symbolic link (Windows)
@@ -321,7 +321,7 @@ working/20/NW-Aus-Features-v0-4_Boundary-error-{zero padded Batch number}.shp
 The script should generate 10 batches of validation data, each containing 10 features per region.
 
 
-# Reference:
+# References:
 
 Australian Hydrographic Office. (2021a). AHO Electronic Navigation Charts Simplified Series service (ArcGIS ImageServer). Retrieved March 15 2025, from https://amsis-geoscience-au.hub.arcgis.com/datasets/geoscience-au::aho-enc-series/about
 
