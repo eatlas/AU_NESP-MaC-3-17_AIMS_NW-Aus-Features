@@ -5,7 +5,7 @@ Purpose
 Evaluate how well the v0-4 reef boundary dataset (A) aligns with an earlier reef/shallow
 mask (B) without assuming one-to-one polygon correspondence. The method samples along
 each dissolved v0-4 reef perimeter and measures nearest-planar distances to any v0-1
-reef/shallow mask boundary segment. It summarizes the local distance distribution
+reef/shallow mask boundary segment. It summarises the local distance distribution
 (percentiles) and positions each feature’s supplied EdgeAcc_m (worst ~10% boundary
 error estimate) within that empirical distribution (EdgePerc) plus a median scaling
 metric (EdgeTo50p).

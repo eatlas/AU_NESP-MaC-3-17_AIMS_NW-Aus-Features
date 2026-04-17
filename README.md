@@ -4,10 +4,10 @@ This repository contains utility scripts that were used in the development of th
 Lawrey, E., Bycroft, R., & Markey, K. (2025). North and West Australian Tropical Reef Features - Boundaries of coral reefs, rocky reefs and sand banks (NESP-MaC 3.17, AIMS, Aerial Architecture) (Version 1-0) [Data set]. eAtlas. https://doi.org/10.26274/XJ4V-2739
 
 
-It should be noted that this dataset was largely created manually and these scripts represent utilities that were used to process portions of the dataset production, and do not fully represent the full workflow associated with the dataset as much of the processing was performed in QGIS. It should also be noted that most of these scripts refer to files that were intermediate files during the production and thus will not work directly from the public files. They are provided as a form of documentation, rather than to allow a blind rerun of the processing from scratch.
+It should be noted that this dataset was largely created manually and these scripts represent utilities that were used to process portions of the dataset production, and do not fully represent the workflow associated with the dataset as much of the processing was performed in QGIS. It should also be noted that most of these scripts refer to files that were intermediate files during the production and thus will not work directly from the public files. They are provided as a form of documentation, rather than to allow a blind rerun of the processing from scratch.
 
 # Version summaries
-This provides a brief overview of each version of the dataset. A detailed log of changes made are provided in the [CHANGELOG.md](CHANGELOG.md).
+This provides a brief overview of each version of the dataset. A detailed log of changes made is provided in the [CHANGELOG.md](CHANGELOG.md).
 
 ## v1-0 - All depth classification complete - Satellite only reef mapping
 This version primarily focused on the completion of assigning depth classifications to all reefs, based on satellite depth estimates using the infrared, red and green channels. These depth estimates are fairly crude, but are relatively consistent across the whole study area. In the next version of the dataset we will be calibrating and assessing the accuracy of the depth classifications based on a comparison with the AHO marine charts.
@@ -15,7 +15,7 @@ This version primarily focused on the completion of assigning depth classificati
 This version of the dataset is a mapping of all the reefs based primarily from satellite imagery alone. We have not yet incorporated the additional information that is available from bathymetry datasets and marine charts into this version, other than determining where reefs were previously mapped.
 
 ## v0-4 - Developed for the draft national scale NVCL 
-This version is intended to flow into the national scale reef dataset (Lawrey & Bycroft, 2025). This national scale dataset is intended to be classified to the Natural Values Common Language and will combine updated mapping of the GBR and Torres Strait, and existing mapping of the Coral Sea. In this version we drop the integration of the 'Shallow sediment' and the automated 'Intertidal Rocky Reef' datasets. Each of these need additional work to make them align with the NVCL definitions. We shift this integration to the national scale, so these feature types are treated uniformly at the national scale.
+This version is intended to flow into the national scale reef dataset (Lawrey & Bycroft, 2025). This national scale dataset is intended to be classified to the Natural Values Common Language and will combine updated mapping of the GBR and Torres Strait, and existing mapping of the Coral Sea. In this version we drop the integration of the 'Shallow sediment' and the automated 'Intertidal Rocky Reef' datasets. Each of these needs additional work to make them align with the NVCL definitions. We shift this integration to the national scale, so these feature types are treated uniformly at the national scale.
 
 Lawrey, E., Bycroft, R. (2025). Australian Tropical Reef Features - Boundaries of coral and rocky reefs (NESP MaC 3.17, AIMS). [Data set]. eAtlas. https://doi.org/10.26274/4rrw-rr88
 
@@ -25,16 +25,16 @@ This version introduced the following classifications:
 
 This version includes the following improvements:
 - The mapping of the paleo rocky reefs off Eighty mile beach, separating out sand banks from the rocky portions.
-- Review and improvement of the 'Attachment' attribute. This found 6% error rate, with remnant errors estimated at 2%.
-- Significant improvement to the mapping Cocos Keeling Island, Christmas Island, Norfolk Island, Middleton Reef, Elizabeth Reef, and Lord Howe Island.
+- Review and improvement of the 'Attachment' attribute. This found a 6% error rate, with remnant errors estimated at 2%.
+- Significant improvements to the mapping of Cocos Keeling Island, Christmas Island, Norfolk Island, Middleton Reef, Elizabeth Reef, and Lord Howe Island.
 
 ### Known issues
 - The `EdgeAcc_m` attribute is a string field when it should be a numeric field. Some features (~5%) do not have their edge accuracy assessed.
-- The `DepthCat` and `DepthCatSr` is not assigned for most features, however most offshore features were assessed to allow their assignment to shallow or deep.
+- The `DepthCat` and `DepthCatSr` are not assigned for most features, however most offshore features were assessed to allow their assignment to shallow or deep.
 - Only limited review has been performed on the expert assessment of the `FeatConf` and `TypeConf`.  
 - Many of the small inshore rocky reefs are not included, particularly in the Kimberley area. It was decided to defer the inclusion of the automated intertidal rocky reef mapping as it needs more work.
 - The classification accuracy of the reefs in the Pilbara needs more work. This region has a lot of limestone reefs, with an overlay of active modern coral reefs. The division between coral reefs and limestone reefs has only been partly implemented.
-- The `Coral Reef Inner Flat` has not been fully rolled out to the fringing reefs of Kimberley. As a result most of the fringing reefs only cover the active coral area, not the reef flat. As a result this version underestimates geological extent of the reefs.
+- The `Coral Reef Inner Flat` has not been fully rolled out to the fringing reefs of Kimberley. As a result most of the fringing reefs only cover the active coral area, not the reef flat. As a result this version underestimates the geological extent of the reefs.
 
 ## v0-3 - UQ Habitat classification masks
 This version was developed to assist with the UQ habitat mapping. It consisted of the coral reefs, rocky reefs and shallow sediment. The rocky reefs included both the manually digitised rocky reefs and semi-automated intertidal rocky reef boundary (AU_NESP-MaC-3-17_AIMS_Rocky-reefs_V1) combined. The shallow sediment corresponded to optically shallow areas mapped to approximately LAT, except for seagrass areas where deeper waters were included. The training of the habitat mapping was split into coral reef, rocky reef and sediment areas based on these layers.
@@ -42,7 +42,7 @@ This version was developed to assist with the UQ habitat mapping. It consisted o
 No additional validation was done on this version, above the review conducted as part of `v0-2`.
 
 # Setup guide for running the scripts and editing the data
-Most of the mapping in this dataset is perform manually in QGIS based on satellite imagery. The scripts are used to download the source data, and to perform transformations on the classification and clipping operations. 
+Most of the mapping in this dataset is performed manually in QGIS based on satellite imagery. The scripts are used to download the source data, and to perform transformations on the classification and clipping operations. 
 
 ## 1. Prerequisites
 - If using Conda, install [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install) (Untested) or use Anaconda Navigator.
@@ -68,12 +68,12 @@ cd AU_NESP-MaC-3-17_AIMS_NW-Aus-Features
 ## 4. Editing in QGIS
 If you are making a new version of the dataset then you should start with the previous 'edit' version, not the final processed version. 
 ### v0-4 processing notes
-For v0-4 we needed to adjust the classification so `09-v0-4-class-cross-walk.py` was used to read `working/02/Reef_Boundaries_Clean.shp`, the previous editable version of the dataset. `v0-3` release didn't have an editable version because it focused on merging datasets together. This script created saved the conversion to `working/09/Reef-Boundaries_v0-4.shp`, which was manually copied to `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp`. This manual copy was done to prevent an accidental overwrite of any manual edits if the script was run once again. `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp` was then manually edited in QGIS to fix issues in the previous version. This shapefile is the current editable version. The final data file `data/v0-4/out/NW-Aus-Features_v0-4.shp` is derived from the edit version, by running `10-v0-4-clip-land.py`.
+For v0-4 we needed to adjust the classification so `09-v0-4-class-cross-walk.py` was used to read `working/02/Reef_Boundaries_Clean.shp`, the previous editable version of the dataset. `v0-3` release didn't have an editable version because it focused on merging datasets together. This script created and saved the conversion to `working/09/Reef-Boundaries_v0-4.shp`, which was manually copied to `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp`. This manual copy was done to prevent an accidental overwrite of any manual edits if the script was run once again. `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp` was then manually edited in QGIS to fix issues in the previous version. This shapefile is the current editable version. The final data file `data/v0-4/out/NW-Aus-Features_v0-4.shp` is derived from the edit version, by running `10-v0-4-clip-land.py`.
 
 ### v1-0 process notes
-We started with copying over the `data/v0-4/` to `data/v1-0`. We updated the paths in the QGIS files to fix path dependencies. See section 'Notes on making a new version of this dataset' for more details on setting up a new version. We then made edits to the `Reef-Boundaries_v1-0_edit.shp` dataset, recording progress in the `CHANGELOG.md`. The final output products were made using `10-clip-land.py`, `11-expand-attribs.py` and `12-make-RB_Type_L2.py`. Analysis of the changes were done using `A02-unmapped-reefs.py`, `A02b-tier1-overlap-analysis.py` and `A03-version-changes.py`. 
+We started with copying over the `data/v0-4/` to `data/v1-0`. We updated the paths in the QGIS files to fix path dependencies. See section 'Notes on making a new version of this dataset' for more details on setting up a new version. We then made edits to the `Reef-Boundaries_v1-0_edit.shp` dataset, recording progress in the `CHANGELOG.md`. The final output products were made using `10-clip-land.py`, `11-expand-attribs.py` and `12-make-RB_Type_L2.py`. Analysis of the changes was done using `A02-unmapped-reefs.py`, `A02b-tier1-overlap-analysis.py` and `A03-version-changes.py`. 
 
-If you were to start from scratch from this version then you would download the repo, run 01a, 01b, 01c, then remake the outputs by running scripts 10, 11, and 12. Scripts 02, 03, 04, 05, 06, 07, 08, and 09 are only relevant to earlier versions of the dataset and are provided as documentation of the history of the processing.
+If you were to start fresh from this version then you would download the repo, run 01a, 01b, 01c, then remake the outputs by running scripts 10, 11, and 12. Scripts 02, 03, 04, 05, 06, 07, 08, and 09 are only relevant to earlier versions of the dataset and are provided as documentation of the history of the processing.
 
 
 ## Moving the 3rd party data download out of One Drive using a Symbolic link (Windows)
@@ -95,7 +95,7 @@ cd <path to project>\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features\data\v1-0
 mklink /D "in-3p" "C:\data-3p\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features\in-3p"
 ```
 
-If you can't setup a symbolic link and still want to store the data in a separate folder then you can simply edit the paths in scripts and the paths in the QGIS preview-maps.qgz.
+If you can't set up a symbolic link and still want to store the data in a separate folder then you can simply edit the paths in scripts and the paths in the QGIS preview-maps.qgz.
 
 ### Removing the link
 
@@ -108,22 +108,22 @@ Rolling back transaction: done
 [Errno 13] Permission denied: 'C:\\Users\\elawrey\\Anaconda3\\pkgs\\libjpeg-turbo-3.0.0-hcfcfb64_1\\Library\\bin\\wrjpgcom.exe'
 ()
 
-For some reason this particular cache of the library was set with administrator permissions, preventing conda for using this library in the setup. The fix is to switch to admin permissions, delete the `C:\\Users\\elawrey\\Anaconda3\\pkgs\\libjpeg-turbo-3.0.0-hcfcfb64_1` folder, which is safe since it is just a cache. 
+For some reason this particular cache of the library was set with administrator permissions, preventing conda from using this library in the setup. The fix is to switch to admin permissions, delete the `C:\\Users\\elawrey\\Anaconda3\\pkgs\\libjpeg-turbo-3.0.0-hcfcfb64_1` folder, which is safe since it is just a cache. 
 
-I found that when this failure occurs the resulting conda environment ends up in a corrupted state and it must be manually removed, prior to recreating the environment.
+I found that when this failure occurs the resulting conda environment ends up in a corrupted state, and it must be manually removed, prior to recreating the environment.
 
 In my case I needed to delete `C:\Users\elawrey\Anaconda3\envs\nw-aus-feat-env`
 
 # Description of scripts
 
-- **`01-download-input-data.py`**
+- **`01a-download-input-data.py`**
 This script downloads the third party datasets used in the preview maps, such as the world land area, the GBR reefs, the Coral Sea vegetation and bathymetry datasets. This script downloads the data directly from the original source data services and stores it in `C:\Data\2025\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features\working`. This is the folder where the QGIS `preview-maps.qgz` will look for the data files. If you download to a different location you will need to adjust the paths in QGIS. This script should download all data files used to recreate the preview maps and plots used for reporting purposes. 
 `data_downloader.py` is a utility library that is used by `01-download-preview-map-data.py`.
 
-- **`01a-download-sentinel2.py`**
+- **`01b-download-sentinel2.py`**
 Downloads Sentinel-2 satellite imagery composites (15th percentile and low tide imagery) for northern Australia and the Great Barrier Reef.
 
-- **`02-v0-3-clean-overlaps.py`**
+- **`02-clean-overlaps.py`**
 Removes overlaps between different reef types according to specific hierarchy rules, particularly focusing on High Intertidal Coral Reef features.
 
 - **`03-v0-3-class-cross-walk.py`**
@@ -174,7 +174,7 @@ Validation: Aggregates sampled match-line distances per reef to derive full boun
 - **`V04c-v0-4-test-monte-carlo-boundary.py`**
 Validation: Generates simulated (dithered) reef boundaries via stochastic buffering using EdgeAcc_m-derived log-normal ratios to test Monte Carlo boundary uncertainty modelling.
 
-- **`A01-uncharted-reefs.py`**
+- **`A01-uncharted-reefs-analysis.py`**
 Analysis: Identifies coral and rocky reef features within AHO uncharted areas that are not present in AHO reef or ReefKIM datasets to flag potentially uncharted reefs. This analysis is currently limited to the Gulf of Carpentaria.
 
 - **`A02-unmapped-reefs.py`**
@@ -190,15 +190,15 @@ This script compares the current version with the previous version to generate s
 Compares manual and automated reef masks to evaluate true positives, false positives, and false negatives.
 
 ## Notes on making a new version of this dataset
-From time to time this dataset will be improved, making a new version of the dataset. The following are notes on what is needed to be setup when making a new version. Note: This list is not exhaustive and was written mid-way through the development of v1-0 and so is not tested end-to-end.
+From time to time this dataset will be improved, making a new version of the dataset. The following are notes on what is needed to be set up when making a new version. Note: This list is not exhaustive and was written mid-way through the development of v1-0 and so is not tested end-to-end.
 1. Make sure that you have downloaded `data/{current version}` by running `01a-download-input-data.py`. 
-1. Make sure there is a release and tag in GitHub for the current version before you start modifying the code. We might have forgotten to set this up during the previous publication.
-2. Rename `data/{current version}` to `data/{new version}`. 
-3. Update the version number in `data/in/Reef-Boundaries_{version}_edit.shp`. This will now be the file that we edit to make the new version of the dataset.
-4. Rename `data/{new version}/*-{current version}.qgz` to have the new version number. Open each of these in QGIS and update the broken links to the change in the version number.
-5. Edit `config.ini` and change the `version` and `in_3p_path` to match the new version.
-6. Create a new entry in CHANGELOG.md to record a summary of all the modifications for this version.
-7. Run `10-clip-land.py`, `11-expand-attribs.py` and `12-make-RB_Type_L2.py` to determine whether the pipeline works before making changes to the dataset.
+2. Make sure there is a release and tag in GitHub for the current version before you start modifying the code. We might have forgotten to set this up during the previous publication.
+3. Rename `data/{current version}` to `data/{new version}`. 
+4. Update the version number in `data/in/Reef-Boundaries_{version}_edit.shp`. This will now be the file that we edit to make the new version of the dataset.
+5. Rename `data/{new version}/*-{current version}.qgz` to have the new version number. Open each of these in QGIS and update the broken links to the change in the version number.
+6. Edit `config.ini` and change the `version` and `in_3p_path` to match the new version.
+7. Create a new entry in CHANGELOG.md to record a summary of all the modifications for this version.
+8. Run `10-clip-land.py`, `11-expand-attribs.py` and `12-make-RB_Type_L2.py` to determine whether the pipeline works before making changes to the dataset.
 
 ### Errors and problems
 The following errors and problems can occur when making a new version of the dataset.
@@ -212,7 +212,7 @@ This indicates that one of the adjusted features has a cross over in its polygon
 This analysis was performed on the v0-4 dataset and is planned to be completed as part of the final dataset validation in v1-1. No additional work was done on this in v1-0.
 
 To provide a basic level of validation to the dataset we perform an expert review of a random sample of reef features, looking to answer the following key questions:
-1. Does the indicated feature exists? i.e. it is a reef or sand bank
+1. Does the indicated feature exist? i.e. it is a reef or sand bank
 2. Is the classification accurate?
 3. Are there other errors associated with the feature such as boundary accuracy or other attributes?
 The goal of this validation is to assess the number of false positives that are likely in the dataset. False positives are problematic as they could lead to proponents being sent to investigate non-existent features, leading to wasted time and money.
@@ -221,7 +221,7 @@ A significant challenge in validating the dataset is the small size of reefs rel
 
 We instead assess the accuracy of mapped reefs by randomly selecting a number of reefs to perform a detailed review by two reef mapping experts. This ensures that the focus is on the small areas represented by the reefs. This approach does not assess the false negative rate, i.e. features that are not mapped. 
 
-The density of reef features is not uniform along the coastline, with the Kimberley containing a much higher density of features per unit area. To ensure that each region receives sufficient features to review the study area was broken into 12 regions, each corresponding to segments of 350 - 600 km of coastline. Where possible the boundaries were chose to closely align with existing named regions and with the natural boundaries of systems. All offshore reefs were clustered into a single group due to the low number of offshore features.
+The density of reef features is not uniform along the coastline, with the Kimberley containing a much higher density of features per unit area. To ensure that each region receives sufficient features to review the study area was broken into 12 regions, each corresponding to segments of 350 - 600 km of coastline. Where possible the boundaries were chosen to closely align with existing named regions and with the natural boundaries of systems. All offshore reefs were clustered into a single group due to the low number of offshore features.
 
 A Python script was used to randomly choose an equal number of features from each region. These were organised into batches of 10 features per region per batch. This allowed the team to work progressively, with each batch covering the full study area. 
 
@@ -252,12 +252,12 @@ central and inside the feature polygon to ensure this spatial join works correct
 2. Polygon-extent: A simplified polygon that represents the extent of the feature. This 
 polygon aims to assist the validator in understanding the extent of the feature without 
 biasing them to the exact geometry of the feature. The geometry vertices should be randomly 
-fuzzed by approximately 50 m and simplified to a approximately 50 m allowable error.
-3. Boundary-error: One or more points that line on a random point of the the boundary of the feature polygon. 
+fuzzed by approximately 50 m and simplified to an approximately 50 m allowable error.
+3. Boundary-error: One or more points that lie on a random point of the boundary of the feature polygon.
 These points will be repositioned by the validator to lie on the closest best estimate of the 
 true boundary of the feature. To reduce bias, these points should be randomly
 chosen from the simplified version of the polygon. These points can lie on the lines
-between vertices of the simplified polygon, or the vertices themselves.. 
+between vertices of the simplified polygon, or the vertices themselves.
 
 The Feature-centroid, Polygon-extent and Boundary-error should be cross linked by a unique ID.
 
@@ -323,9 +323,9 @@ The script should generate 10 batches of validation data, each containing 10 fea
 
 # References:
 
-Australian Hydrographic Office. (2021a). AHO Electronic Navigation Charts Simplified Series service (ArcGIS ImageServer). Retrieved March 15 2025, from https://amsis-geoscience-au.hub.arcgis.com/datasets/geoscience-au::aho-enc-series/about
+Australian Hydrographic Office. (2021a). AHO Electronic Navigation Charts Simplified Series service (ArcGIS ImageServer). Retrieved March 15, 2025, from https://amsis-geoscience-au.hub.arcgis.com/datasets/geoscience-au::aho-enc-series/about
 
-Australian Hydrographic Office. (2021b). AHO Chart Series chart service. Retrieved Nov 28 2024, from https://amsis-geoscience-au.hub.arcgis.com/datasets/geoscience-au::aho-chart-series/about
+Australian Hydrographic Office. (2021b). AHO Chart Series chart service. Retrieved Nov 28, 2024, from https://amsis-geoscience-au.hub.arcgis.com/datasets/geoscience-au::aho-chart-series/about
 
 AHO. (n.d.). Electronic Navigation Charts Simplified Series (ArcGIS ImageServer) [Dataset]. Australian Hydrographic Office. Retrieved February 12, 2025, from https://services.hydro.gov.au/site1/rest/services/Basemaps/AHOENCSimplifiedSeries/ImageServer
 
@@ -336,7 +336,7 @@ https://library.dbca.wa.gov.au/static/Journals/080598/080598-09.pdf
 
 Kordi, M. N., Collins, L. B., O’Leary, M., & Stevens, A. (2016). ReefKIM: An integrated geodatabase for sustainable management of the Kimberley Reefs, North West Australia. Ocean & Coastal Management, 119, 234–243. https://doi.org/10.1016/j.ocecoaman.2015.11.004
 
-Lawrey, E. (2025) Semi-automated Shallow Marine Mask for Northern Australia and GBR Derived from Sentinel-2 Imagery (NESP MaC 3.17, AIMS) (Version 1-1) [Data set]. eAtlas. https://doi.org/10.26274/x37r-xk75
+Lawrey, E. (2025). Semi-automated Shallow Marine Mask for Northern Australia and GBR Derived from Sentinel-2 Imagery (NESP MaC 3.17, AIMS) (Version 1-1) [Data set]. eAtlas. https://doi.org/10.26274/x37r-xk75
 
 
 

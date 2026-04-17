@@ -3,7 +3,7 @@
 
 ## Purpose
 This script generates validation locations for reef features in Northwest Australia.
-The purpose is to create standardized validation points that can be used to assess
+The purpose is to create standardised validation points that can be used to assess
 the quality and consistency of reef feature mapping across different versions of the
 dataset. By creating these reference points, we can automatically validate updates
 to the mapped features without requiring manual re-evaluation.
@@ -15,7 +15,7 @@ validation datasets, which they can then modify independently. This approach:
 
 1. Allows comparison between different validators' assessments
 2. Prevents mix-ups between different validators' work
-3. Organizes files in validator-specific directories
+3. Organises files in validator-specific directories
 
 For each validator, the files are saved in this structure:
 working/20/{validator_initials}/NW-Aus-Features-v0-4_Feature-centroid-{batch}_{validator_initials}.shp
@@ -23,7 +23,7 @@ working/20/{validator_initials}/NW-Aus-Features-v0-4_Feature-centroid-{batch}_{v
 ## Methodology
 The script implements a stratified random sampling approach:
 
-1. **Spatial Stratification**: 
+1. **Spatial Stratification**:
    - The study area is divided into 12 regions using the validation regions shapefile
    - Features are assigned to regions based on their centroids
    - For each region, a fixed number of features (10 by default) are randomly selected
@@ -32,13 +32,13 @@ The script implements a stratified random sampling approach:
 2. **Three Validation Datasets**:
    - **Feature-centroid**: Points at the center of each feature with validation attributes
      (FeatExists, TypeConf, RB_Type_L3, FeatConf, Attachment)
-     This allows the person developing the validation dataset to record the attributes of 
+     This allows the person developing the validation dataset to record the attributes of
      the feature being validated. These attributes can then be compared with the mapped features
      and other people that have also validated the same feature.
    - **Polygon-extent**: Either a simplified and randomly fuzzed polygon representing feature boundaries,
      or a bounding box of the fuzzed polygon (depending on a global setting).
-     The bounding box option provides the validator with only the approximate size and location of the 
-     feature, minimizing bias in interpreting the boundary.
+     The bounding box option provides the validator with only the approximate size and location of the
+     feature, minimising bias in interpreting the boundary.
    - **Boundary-error**: Random points along feature boundaries (not on land)
      - Small features (<1km perimeter): 1 boundary point
      - Larger features: 3 boundary points
@@ -55,13 +55,13 @@ The script implements a stratified random sampling approach:
        near reefs, as well as along coastline areas where no reefs have been mapped.
      - Rejection sampling is used to select fake feature locations, evenly across the mask.
      - Randomly sampling points within this mask to serve as fake feature centroids.
-     - Assigning each fake feature a random size (with a bias toward smaller features) and aspect ratio, 
+     - Assigning each fake feature a random size (with a bias toward smaller features) and aspect ratio,
        and generating a bounding box polygon and boundary-error points as for real features.
-   - The proportion of fake features is controlled by a global constant (default 30% of the total 
+   - The proportion of fake features is controlled by a global constant (default 30% of the total
      validation set).
-   - Fake and real features are intermixed in the output datasets, making it difficult for validators 
+   - Fake and real features are intermixed in the output datasets, making it difficult for validators
      to know which locations are real or fake, thus reducing confirmation bias.
-   - A separate shapefile of fake centroids is also saved for later analysis, but the main validation 
+   - A separate shapefile of fake centroids is also saved for later analysis, but the main validation
      dataset does not indicate which points are fake.
 
 4. **Processing Steps**:
@@ -115,22 +115,22 @@ BASE_PATH = config.get('general', 'in_3p_path')
 RANDOM_SEED = 315
 NUM_BATCHES = [1, 10, 10]
 FEATURES_PER_REGION = [1, 10, 10]
-VALIDATORS = ['Examples', 'EL', 'RB']  
+VALIDATORS = ['Examples', 'EL', 'RB']
 
 # This collection is used for the production validation dataset.
-# RANDOM_SEED = 42  
+# RANDOM_SEED = 42
 # NUM_BATCHES = 10
 # FEATURES_PER_REGION = 10
 
 # Initials of the people who will validate the dataset
 # This will create a copy of the validation data per person
-# VALIDATORS = ['EL', 'RB']  
+# VALIDATORS = ['EL', 'RB']
 
 
 SIMPLIFY_TOLERANCE = 50  # meters
 FUZZ_DISTANCE = 100  # meters for vertex fuzzing
-SMALL_BOUNDARY_POINTS_PER_FEATURE = 1 
-LARGE_BOUNDARY_POINTS_PER_FEATURE = 1 
+SMALL_BOUNDARY_POINTS_PER_FEATURE = 1
+LARGE_BOUNDARY_POINTS_PER_FEATURE = 1
 SMALL_SIZE_THRESHOLD_M = 2000  # Threshold for small features in meters
 MAX_ATTEMPTS_PER_POINT = 10  # Maximum attempts to find a point not on land
 
@@ -147,7 +147,7 @@ OUTPUT_DIR = "working/20"
 FAKE_FEATURE_PROPORTION = 0.3  # Proportion of fake features (open water) in the validation set
 FAKE_ATTEMPT_LIMIT = 1000      # Max attempts for rejection sampling fake locations
 
-# For reference the number of features per batch is 
+# For reference the number of features per batch is
 # FEATURES_PER_REGION*REGIONS(12)*(1+FAKE_FEATURE_PROPORTION)
 
 
@@ -156,11 +156,11 @@ def load_data():
     print("Loading validation regions...")
     regions = gpd.read_file(VALIDATION_REGIONS_FILE)
     print(f"Loaded {len(regions)} validation regions with CRS: {regions.crs}")
-    
+
     print("Loading reef features...")
     features = gpd.read_file(FEATURES_FILE)
     print(f"Loaded {len(features)} reef features with CRS: {features.crs}")
-    
+
     print("Loading full coastline...")
     full_coastline = gpd.read_file(FULL_COASTLINE_FILE)
     print(f"Loaded {len(full_coastline)} coastline features with CRS: {full_coastline.crs}")
@@ -168,11 +168,11 @@ def load_data():
     print("Loading simple coastline...")
     simp_coastline = gpd.read_file(SIMP_COASTLINE_FILE)
     print(f"Loaded {len(simp_coastline)} coastline features with CRS: {simp_coastline.crs}")
-    
+
     # Print bounding boxes for debugging
     print(f"Features bounding box: {features.total_bounds}")
     print(f"Regions bounding box: {regions.total_bounds}")
-    
+
     return regions, features, full_coastline, simp_coastline
 
 def assign_features_to_regions(features, regions):
@@ -181,24 +181,24 @@ def assign_features_to_regions(features, regions):
     # Calculate centroids for spatial join
     features_centroids = features.copy()
     features_centroids['geometry'] = features_centroids.geometry.centroid
-    
+
     print(f"Feature centroids CRS: {features_centroids.crs}")
     print(f"Regions CRS: {regions.crs}")
-    
+
     # Check if CRS are compatible or need transformation
     if features_centroids.crs != regions.crs:
         print(f"WARNING: CRS mismatch! Converting features from {features_centroids.crs} to {regions.crs}")
         features_centroids = features_centroids.to_crs(regions.crs)
-    
+
     # Spatial join to assign region
     features_with_region = gpd.sjoin(features_centroids, regions, how="left", predicate="within")
-    
+
     # Count how many features were assigned to regions
     unassigned = features_with_region[features_with_region['RegionID'].isna()]
     assigned = features_with_region[~features_with_region['RegionID'].isna()]
     print(f"Features assigned to regions: {len(assigned)} of {len(features_with_region)}")
     print(f"Features NOT assigned to any region: {len(unassigned)}")
-    
+
     if len(assigned) == 0:
         print("ERROR: No features were assigned to any region!")
         print("Checking if features intersect with regions at all...")
@@ -206,13 +206,13 @@ def assign_features_to_regions(features, regions):
         intersects_join = gpd.sjoin(features_centroids, regions, how="left", predicate="intersects")
         intersects_count = len(intersects_join[~intersects_join['RegionID'].isna()])
         print(f"Features that intersect with regions: {intersects_count}")
-        
+
         # Sample a few features and check their coordinates
         print("Sample feature centroid coordinates:")
         sample_size = min(5, len(features_centroids))
         for i, (idx, row) in enumerate(features_centroids.iloc[:sample_size].iterrows()):
             print(f"  Feature {i}: {row.geometry.x}, {row.geometry.y}")
-    
+
     # Group features by region
     features_by_region = {}
     for region_id in regions['RegionID'].unique():
@@ -227,7 +227,7 @@ def assign_features_to_regions(features, regions):
             # Create a proper empty GeoDataFrame with a geometry column
             features_by_region[region_id] = gpd.GeoDataFrame({'geometry': []}, crs=features.crs)
             print(f"Region {region_id}: No features")
-    
+
     return features_by_region
 
 def convert_to_crs_units(distance_m, crs):
@@ -243,15 +243,15 @@ def simplify_and_fuzz_polygon(polygon, crs):
     # Convert distances to appropriate units
     tolerance_units = convert_to_crs_units(SIMPLIFY_TOLERANCE, crs)
     fuzz_distance_units = convert_to_crs_units(FUZZ_DISTANCE, crs)
-    
+
     # Simplify the polygon
     simplified = polygon.simplify(tolerance_units)
-    
+
     # Apply fuzzing to vertices
     def fuzz_coords(coords):
         return [(x + random.uniform(-fuzz_distance_units, fuzz_distance_units),
                  y + random.uniform(-fuzz_distance_units, fuzz_distance_units)) for x, y in coords]
-    
+
     if simplified.geom_type == 'Polygon':
         exterior_coords = list(simplified.exterior.coords)
         fuzzed_coords = fuzz_coords(exterior_coords)
@@ -265,7 +265,7 @@ def simplify_and_fuzz_polygon(polygon, crs):
         fuzzed_polygon = MultiPolygon(fuzzed_parts)
     else:
         fuzzed_polygon = simplified  # fallback
-    
+
     if POLYGON_EXTENT_USE_BOUNDING_BOX:
         # Return the bounding box as a Polygon
         minx, miny, maxx, maxy = fuzzed_polygon.bounds
@@ -289,7 +289,7 @@ def generate_boundary_points(polygon, crs, coastline):
     """
     # Get the boundary of the polygon
     boundary = polygon.boundary
-    
+
     # Calculate perimeter length in meters (approx)
     perimeter = 0
     if boundary.geom_type == 'LineString':
@@ -299,16 +299,16 @@ def generate_boundary_points(polygon, crs, coastline):
     else:
         print(f"Warning: Unexpected geometry type: {boundary.geom_type}")
         return []
-    
+
     # If using geographic coordinates, convert to approximate meters
     if crs.is_geographic:
         # Rough conversion: 1 degree ~ 111km at equator
         perimeter = perimeter * 111000
-    
+
     # Determine number of points based on size
     num_points = SMALL_BOUNDARY_POINTS_PER_FEATURE \
         if perimeter < SMALL_SIZE_THRESHOLD_M else LARGE_BOUNDARY_POINTS_PER_FEATURE
-    
+
     # Handle different geometry types
     if boundary.geom_type == 'LineString':
         lines = [boundary]
@@ -317,23 +317,23 @@ def generate_boundary_points(polygon, crs, coastline):
     else:
         print(f"Warning: Unexpected geometry type: {boundary.geom_type}")
         return []
-    
+
     # Calculate the total length of all line segments
     total_length = sum(line.length for line in lines)
-    
+
     # Generate points and check against coastline
     valid_points = []
     attempts = 0
     max_attempts = num_points * MAX_ATTEMPTS_PER_POINT
-    
+
     while len(valid_points) < num_points and attempts < max_attempts:
         # Choose a random position along the total length
         pos = random.uniform(0, total_length)
-        
+
         # Find which line segment this position falls on
         current_length = 0
         point = None
-        
+
         for line in lines:
             if pos <= current_length + line.length:
                 # This is the line that contains our point
@@ -341,18 +341,18 @@ def generate_boundary_points(polygon, crs, coastline):
                 point = line.interpolate(position_on_line)
                 break
             current_length += line.length
-        
+
         if point is not None:
             # Check if the point overlaps with land
             if not coastline.contains(point).any():
                 valid_points.append(point)
-        
+
         attempts += 1
-    
+
     if len(valid_points) < num_points:
         print(f"Warning: Could only generate {len(valid_points)} valid boundary points " 
               f"out of {num_points} requested after {attempts} attempts.")
-    
+
     return valid_points
 
 def ensure_centroid_inside(polygon):
@@ -360,7 +360,7 @@ def ensure_centroid_inside(polygon):
     centroid = polygon.centroid
     if polygon.contains(centroid):
         return centroid
-    
+
     # If centroid is not inside, use a point on surface
     return polygon.representative_point()
 
@@ -378,8 +378,8 @@ def create_fake_location_mask(features, coastline, regions):
     mask_file = os.path.join(OUTPUT_DIR, "NW-Aus-Features-v0-4_Fake-location-mask.shp")
     if os.path.exists(mask_file):
         print(f"Fake location mask already exists at {mask_file}. Skipping creation.")
-        return gpd.read_file(mask_file) 
-    
+        return gpd.read_file(mask_file)
+
     print("Creating fake location mask...")
     features_4326 = features.to_crs("EPSG:4326")
     coastline_4326 = coastline.to_crs("EPSG:4326")
@@ -527,7 +527,7 @@ def generate_fake_features(num_fake, mask, crs, coastline):
         boundary_pts = generate_boundary_points(poly, crs, coastline)
         for bpt in boundary_pts:
             boundary_errors.append({
-                'ValidID': None, 
+                'ValidID': None,
                 'EdgeAcc_m': None,  # Placeholder for edge accuracy
                 'geometry': bpt
             })  # Will assign after shuffle
@@ -676,7 +676,7 @@ def main():
     features_by_region = assign_features_to_regions(features, regions)
     # Create fake location mask. Use simplified coastline for better performance
     fake_location_mask = create_fake_location_mask(features, simp_coastline, regions)
-    
+
     for i, validator in enumerate(VALIDATORS):
         print(f"\nProcessing validator {validator} ({i+1}/{len(VALIDATORS)})")
         num_batches = NUM_BATCHES[i]

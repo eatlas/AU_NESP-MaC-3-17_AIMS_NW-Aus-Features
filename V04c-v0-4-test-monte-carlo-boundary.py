@@ -1,24 +1,24 @@
 """
 To assess the uncertainty in the mapping of the reef boundaries we need to use the
-EdgeAcc_m attribute of each reef to simulate a distribution of possible reef boundaries. 
-This will allow us to estiamte the uncertainty in counting of reefs when there is a size
+EdgeAcc_m attribute of each reef to simulate a distribution of possible reef boundaries.
+This will allow us to estimate the uncertainty in counting of reefs when there is a size
 and proximity threshold. This script is to check that our proposed dithered reef boundaries
 result in a reef boundary distribution that is equivalent to a remapping of the reef boundaries.
 
 To test this we will take the output of this script and pass it through V04a and V04b to verify
-if the characteristics of the boundary error distributions are similar to the independent 
+if the characteristics of the boundary error distributions are similar to the independent
 mapping of the reef boundaries, from v0-1 Rough Reef Mask.
 
 In this script we load the v0-4 reef boundaries, then for each reef we apply a random buffer
 based on the EdgeAcc_m attribute. The amount of buffering is based on a log-normal distribution
-with a mu and sigma that is derived from matching the boundaries of the v0-1 Rough Reef Mask to 
+with a mu and sigma that is derived from matching the boundaries of the v0-1 Rough Reef Mask to
 the v04 reef boundaries. The calculation of mu and sigma is done in V04b-v0-4-analyse-match-lines.py.
 
 The output of this script is a single shapefile with the dithered reef boundaries based on this
 simple model. The goal of the script is to prove with this simple model that we can match the
-characteristics of the boundary error distribution. 
+characteristics of the boundary error distribution.
 
-The boundary error is a log-normal distribution that is an estimate between the single EdgeAcc_m 
+The boundary error is a log-normal distribution that is an estimate between the single EdgeAcc_m
 attribute value associated with each reef feature and the 50th percentile error distance between
 repeat mappings of the reefs. i.e. If I remap a reef then the boundary will change. If I measure
 the distance between the two boundaries I can get a distribution of distances. The 50th percentile
@@ -27,15 +27,15 @@ boundary we take the EdgeAcc_m attribute then scale it by the Edge Accuracy to 5
 (edge_acc_ratio). The edge_acc_ratio is not a constant, but is sampled from a log-normal distribution
 defined by MU and SIGMA below. The edge_acc_ratio is constrained to be between MIN_RATIO and MAX_RATIO.
 This prevents extreme values that are not realistic. An edge_acc_ratio of 1.0 means that the EdgeAcc_m
-is equal to the median error distance. An edge_acc_ratio close to zero 0 means that the EdgeAcc_m 
-is much larger than that it should be and the simulated boundary will be very close to the 
+is equal to the median error distance. An edge_acc_ratio close to 0 means that the EdgeAcc_m
+is much larger than that it should be and the simulated boundary will be very close to the
 original boundary.
 
-For example if the EdgeAcc_m is 300 m and the sampled edge_acc_ratio is 0.5 then the median error 
+For example if the EdgeAcc_m is 300 m and the sampled edge_acc_ratio is 0.5 then the median error
 distance is 150 m. This means that the new simulated boundary should be 150 m from the original boundary.
 It could be positive or negative distance. For this we randomly choose to buffer in or out.
 
-After buffering (and merging any touching reefs) the Area_km2 is recalculated. The applied buffer 
+After buffering (and merging any touching reefs) the Area_km2 is recalculated. The applied buffer
 distance is recorded in the Buffer_m attribute.
 
 When buffering results in overlapping polygons these are dissolved into a single polygon.
@@ -60,13 +60,13 @@ from shapely.ops import unary_union
 from shapely.geometry import Polygon, MultiPolygon
 
 # Best fit between v0-1 Rough Reef Mask and v0-4 reef boundaries
-MU = -0.57 
+MU = -0.57
 SIGMA = 0.852
 
 MIN_RATIO = 0.05
 MAX_RATIO = 2.0
 
-DITHER_EDGE_ACC_RATIO = True  # if False use a fixed edge_acc_ratio. If False use Log-normal sampling. 
+DITHER_EDGE_ACC_RATIO = True  # if False use a fixed edge_acc_ratio. If False use Log-normal sampling.
 FIXED_EDGE_ACC_RATIO = 1.0
 
 BASE_REEF_SHP = "working/V04a/NW-Aus-Feat_v0-4_RB_Type_L1_clip.shp"

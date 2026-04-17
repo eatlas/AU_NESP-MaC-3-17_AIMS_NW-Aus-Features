@@ -49,19 +49,19 @@ downloader.download_and_unzip(direct_download_url, 'AU_AIMS_Coastline_50k_2024',
 
 # --------------------------------------------------------
 # Australian Marine Parks
-# DCCEEW (2018). Australian Marine Parks (Version 10 Feb 2025) [Dataset]. Department of Agriculture, Water and the Environment. 
+# DCCEEW (2018). Australian Marine Parks (Version 10 Feb 2025) [Dataset]. Department of Agriculture, Water and the Environment.
 # https://fed.dcceew.gov.au/datasets/erin::australian-marine-parks/about
 direct_download_url = 'https://hub.arcgis.com/api/v3/datasets/2b3eb1d42b8d4319900cf4777f0a83b9_0/downloads/data?format=shp&spatialRefId=4283&where=1%3D1'
 downloader.download_and_unzip(direct_download_url, 'AU_DCCEEW_Australia-Marine-Parks_2025')
 
 
 # --------------------------------------------------------
-# UNEP-WCMC, WorldFish Centre, WRI, TNC (2021). Global distribution of warm-water coral reefs, 
-# compiled from multiple sources including the Millennium Coral Reef Mapping Project. Version 4.1. 
-# Includes contributions from IMaRS-USF and IRD (2005), IMaRS-USF (2005) and Spalding et al. (2001). 
+# UNEP-WCMC, WorldFish Centre, WRI, TNC (2021). Global distribution of warm-water coral reefs,
+# compiled from multiple sources including the Millennium Coral Reef Mapping Project. Version 4.1.
+# Includes contributions from IMaRS-USF and IRD (2005), IMaRS-USF (2005) and Spalding et al. (2001).
 # Cambridge (UK): UN Environment World Conservation Monitoring Centre. Data DOI: https://doi.org/10.34892/t2wk-5t34
 #subfolder_name='14_001_WCMC008_CoralReefs2021_v4_1'
-# This dataset was used for creating comparative maps for the NESP showcase presentation. It is also used for identifying 
+# This dataset was used for creating comparative maps for the NESP showcase presentation. It is also used for identifying
 # already mapped reefs (see A02-unmapped-reefs.py)
 direct_download_url = 'https://datadownload-production.s3.us-east-1.amazonaws.com/WCMC008_CoralReefs2021_v4_1.zip'
 downloader.download_and_unzip(direct_download_url, 'World_WCMC_CoralReefs2021_v4_1', flatten_directory=True)
@@ -80,29 +80,29 @@ downloader.download_and_unzip(direct_download_url, 'World_WCMC_CoralReefs2021_v4
 #downloader.create_virtual_raster(dataset, layer=layer)
 
 # --------------------------------------------------------
-# Flukes, E., (2024). Multi-resolution bathymetry composite surface for Australian waters (EEZ). 
-# Institute for Marine and Antarctic Studies (IMAS). Data accessed from 
-# https://metadata.imas.utas.edu.au/geonetwork/srv/eng/catalog.search#/metadata/69e9ac91-babe-47ed-8c37-0ef08f29338a 
+# Flukes, E., (2024). Multi-resolution bathymetry composite surface for Australian waters (EEZ).
+# Institute for Marine and Antarctic Studies (IMAS). Data accessed from
+# https://metadata.imas.utas.edu.au/geonetwork/srv/eng/catalog.search#/metadata/69e9ac91-babe-47ed-8c37-0ef08f29338a
 # on 31 July 2025
 # These are 22GB and 37 GB files so they will take a while to download.
 # It is used for identifying already mapped reefs (see A02-unmapped-reefs.py)
 direct_download_url = 'https://data.imas.utas.edu.au/attachments/69e9ac91-babe-47ed-8c37-0ef08f29338a/bathymetry/01_shallow_bathy.tif'
 downloader.download(direct_download_url, os.path.join(downloader.download_path, 'MultiRes-Bathy-EEZ_2024', '01_shallow_bathy.tif'))
 
-# We need to mesophotic bathymetry for 30-70m depth range as a lot of deeper reefs are in this range.
+# We need the mesophotic bathymetry for 30-70m depth range as a lot of deeper reefs are in this range.
 direct_download_url = 'https://data.imas.utas.edu.au/attachments/69e9ac91-babe-47ed-8c37-0ef08f29338a/bathymetry/02_mesophotic_bathy.tif'
 downloader.download(direct_download_url, os.path.join(downloader.download_path, 'MultiRes-Bathy-EEZ_2024', '02_mesophotic_bathy.tif'))
 
 # --------------------------------------------------------
-# Geoscience Australia. (2024).AusBathyTopo (Australia) 250m 2024 - A national-scale depth model (20240011C). 
+# Geoscience Australia. (2024).AusBathyTopo (Australia) 250m 2024 - A national-scale depth model (20240011C).
 # https://doi.org/10.26186/150050
 # This is used to identify already mapped reefs in areas outside the coverage of the MultiRes-Bathy-EEZ dataset (see A02-unmapped-reefs.py)
 direct_download_url = 'https://files.ausseabed.gov.au/survey/AusBathyTopo%20(Australia)%202024%20250m.zip'
-downloader.download_and_unzip(direct_download_url, 'AusBathyTopo-250m_2024')  
+downloader.download_and_unzip(direct_download_url, 'AusBathyTopo-250m_2024')
 
 # --------------------------------------------------------
 # GEODATA TOPO 250K Series 3 (Shape file format)
-# Geoscience Australia, (2006) GEODATA TOPO 250K Series 3 (Shape file format). Geoscience Australia, Canberra. 
+# Geoscience Australia, (2006) GEODATA TOPO 250K Series 3 (Shape file format). Geoscience Australia, Canberra.
 # https://pid.geoscience.gov.au/dataset/ga/64058
 direct_download_url = 'https://d28rz98at9flks.cloudfront.net/64058/64058.zip'
 downloader.download_and_unzip(direct_download_url, 'GA_GeoTopo250k_S3')
@@ -129,16 +129,16 @@ downloader.download_and_unzip(direct_download_url, 'AU_AIMS_Rocky-reefs', flatte
 
 # --------------------------------------------------------
 # Alcock, M.B.,Taffs, N.J., Zhong, Q. (2020) Seas and Submerged Lands Act 1973 - Australian Maritime Boundaries 2020 - Geodatabase. Geoscience Australia. https://pid.geoscience.gov.au/dataset/ga/144571
-# This eas used to produce maps showing which reefs on the north west shelf as in Australian waters.
+# This was used to produce maps showing which reefs on the north west shelf are in Australian waters.
 direct_download_url = 'https://d28rz98at9flks.cloudfront.net/144571/144571_01_0.zip'
 downloader.download_and_unzip(direct_download_url, 'AU_GA_AMB2020', flatten_directory = True)
 
 # --------------------------------------------------------
-# Institute for Marine and Antarctic Studies. (2017). Seabed area on the Australian continental shelf and Lord Howe 
-# Island shelf derived and aggregated from Australian Hydrographic Service’s (AHS) seabed area features (sbdare_a) 
+# Institute for Marine and Antarctic Studies. (2017). Seabed area on the Australian continental shelf and Lord Howe
+# Island shelf derived and aggregated from Australian Hydrographic Service’s (AHS) seabed area features (sbdare_a)
 # from the 1 degree S57 file series [for NESP D3] [Dataset]. University of Tasmania.
 # https://metadata.imas.utas.edu.au/geonetwork/srv/eng/catalog.search#/metadata/f56d4f73-7444-4335-8c46-dce34db915f9
-# This dataset is used to as part of determining which reefs have already been mapped. We use this dataset to
+# This dataset is used as part of determining which reefs have already been mapped. We use this dataset to
 # rule out reefs in the uncharted areas of the AHO marine charts.
 direct_download_url = 'https://data.imas.utas.edu.au/attachments/f56d4f73-7444-4335-8c46-dce34db915f9/sbdare_a.zip'
 downloader.download_and_unzip(direct_download_url, 'AU_NESP-D3_AHS_Reefs', flatten_directory = True)
@@ -162,7 +162,7 @@ downloader.download_and_unzip(
 
 
 # --------------------------------------------------------
-# Download the input and output dataset for the current version of the dataset.  This will all download in-3p-mirror
+# Download the input and output dataset for the current version of the dataset.  This will download all the files into in-3p-mirror
 # which includes the ReefKIM dataset.
 # If you are developing a new version of the dataset you will want to run this script prior to updating
 # the version number in config.ini.
