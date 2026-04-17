@@ -1,5 +1,5 @@
 """
-Script: 12-v0-4-make-RB_Type_L2.py
+Script: 12-make-RB_Type_L2.py
 
 Purpose
 - Produce a North/West Australia-only version of the dataset dissolved at RB_Type_L2 so that
@@ -17,7 +17,7 @@ Classification context
   of each reef/rocky reef at L2, rather than separate L3 parts.
 
 Processing overview
-1) Input: working/{version}/11/NW-Features_{version}.shp (NW-only dataset produced by step 11).
+1) Input: AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L3_{version}.shp (NW-only dataset produced by step 11).
 2) Validation:
    - Assert RB_Type_L2 is present and non-empty for all features.
    - Fail if Attachment, DepthCat, FeatConf, or TypeConf contain unexpected enum values.
@@ -41,7 +41,7 @@ Processing overview
    - Flag components where multiple Attachment values were merged (AttSet contains ';').
 6) Area: compute Area_km2 in EPSG:3112, round to 4 decimal places; keep output CRS unchanged (EPSG:4283).
 7) Outputs:
-   - Main dissolved singlepart features: working/{version}/12/NW-Features_{version}_RB-Type-L2.shp
+   - Main dissolved singlepart features: AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L2_{version}.shp
      Fields include RB_Type_L2, RB_L3_Agg, Attachment, DepthCat, DepthCatSr, FeatConf, TypeConf,
      EdgeSrc, EdgeAcc_m, Area_km2, geometry.
    - QA features with mixed Attachment values: working/{version}/12/multi-attachment-values.shp
@@ -63,8 +63,8 @@ cfg.read("config.ini")
 in_3p_path = cfg.get("general", "in_3p_path")
 version = cfg.get("general", "version")
     
-INPUT_SHP = f"working/{version}/11/NW-Features_{version}.shp"
-OUTPUT_SHP = f"working/{version}/12/NW-Features_{version}_RB-Type-L2.shp"
+INPUT_SHP = cfg.get("paths", "current_processed")
+OUTPUT_SHP = cfg.get("paths", "current_processed_L2")
 MULTI_ATTACHMENT_SHP = f"working/{version}/12/multi-attachment-values.shp"
 
 # Attachment priority rule (Land > Fringing > Oceanic > otherwise Isolated)
@@ -247,6 +247,7 @@ def main():
     # Save multi-attachment features after merge (singlepart polygons)
     multi = singleparts[singleparts["HasMultiAtt"]].copy()
     if not multi.empty:
+        os.makedirs(os.path.dirname(MULTI_ATTACHMENT_SHP), exist_ok=True)
         qa_cols = ["RB_Type_L2", "RB_L3_Agg", "Attachment", "AttSet", "DepthCat", "DepthCatSr",
                    "FeatConf", "TypeConf", "EdgeSrc", "EdgeAcc_m", "Area_km2", "geometry"]
         print(f"Saving multi-attachment QA output to {MULTI_ATTACHMENT_SHP}...")
