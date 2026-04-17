@@ -46,12 +46,19 @@
 
 #!/usr/bin/env python3
 import geopandas as gpd
+import configparser
+# Configuration ------------------------------------------------------
+cfg = configparser.ConfigParser()
+cfg.read("config.ini")
+in_3p_path = cfg.get("general", "in_3p_path")
+# in_3p_path = 'data/v1-0/in-3p'
+version = cfg.get("general", "version")
 
 def main():
     # File paths for input datasets
-    aho_file = "data/v0-4/in/AHO-Uncharted/AHO-Uncharted-areas_2025.shp"
-    goc_area_file = "data/v0-4/in/GOC-Area/GOC-Area.shp"
-    reef_file = "data/v0-4/out/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_v0-4.shp"
+    aho_file = f"data/{version}/in/AHO-Uncharted/AHO-Uncharted-areas_2025.shp"
+    goc_area_file = f"data/{version}/in/GOC-Area/GOC-Area.shp"
+    reef_file = cfg.get("paths", "current_processed")
     #"data/stages/01-pre-merge/2025-03-09-Reef-Features_Ref1_RB/Reef Boundaries RB.shp"
     
     # Target CRS (the one used by AHO and GOC-Area, per project documentation)
