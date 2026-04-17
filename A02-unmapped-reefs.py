@@ -48,12 +48,22 @@ BATHY_INDICATED = os.path.join(MANUAL_TAG_DIR, "bathy-indicated.shp")
 CHART_MAPPED = os.path.join(MANUAL_TAG_DIR, "chart-mapped.shp")
 CHART_INDICATED = os.path.join(MANUAL_TAG_DIR, "chart-indicated.shp")
 
+STUDY_BOUNDARY = f"data/{version}/extras/study-boundary/NW-Aus-Features-study-boundary.shp"
+
 OUT_DIR = f"working/{version}/A02"
 CLUSTERS_SHP = os.path.join(OUT_DIR, "countable-reef-clusters.shp")
 ANALYSIS_SHP = os.path.join(OUT_DIR, "unmapped-reefs-analysis.shp")
+MISSED_REEFS_SHP = os.path.join(OUT_DIR, "potential-missed-reefs.shp")
 
 CRS_STORAGE = "EPSG:4283"
 CRS_METRIC = "EPSG:3112"
+
+# Cluster and size thresholds
+CLUSTER_DISTANCE_M = 100    # Minimum distance between separate clusters. Buffer is half this distance
+MIN_EFF_WIDTH_M = 100       # Minimum effective width for a reef cluster to be considered countable
+BATHY_CHART_POINT_BUFFER_M = 250    # Buffer radius for manual point tags to allow for spatial uncertainty
+                                    # Chosen to roughly match many of the isolated reefs and the size of 
+                                    # the mapped features in the marine charts.
 
 # Effective width bounds (m) for each size class  [low, high)
 _SIZE_CLASSES = [
@@ -124,8 +134,8 @@ def build_countable_clusters():
         if subset.empty:
             continue
 
-        # Buffer each polygon by 50 m, dissolve, explode to singlepart envelopes
-        buffered_union = unary_union(subset.geometry.buffer(50))
+        # Buffer each polygon to create cluster envelopes, dissolve, explode to singlepart envelopes
+        buffered_union = unary_union(subset.geometry.buffer(CLUSTER_DISTANCE_M / 2))
         envelope_geoms = _explode_union(buffered_union)
 
         envelopes = gpd.GeoDataFrame(
@@ -155,7 +165,7 @@ def build_countable_clusters():
                     "cluster_id": int(cid),
                     "RB_Type_L2": reef_type,
                     "n_parts": len(grp),
-                    "c_area_km2": round(cluster_area_m2 / 1e6, 4),
+                    "c_area_km2": round(cluster_area_m2 / 1e6, 5),
                     "eff_wid_m": round(eff_width, 1),
                     "size_class": _classify_size(eff_width),
                     "geometry": dissolved_geom,
@@ -164,8 +174,8 @@ def build_countable_clusters():
 
     clusters = gpd.GeoDataFrame(all_rows, crs=CRS_METRIC)
 
-    # Step 1.3 — Filter to countable reefs (effective width >= 100 m)
-    clusters = clusters[clusters["eff_wid_m"] >= 100].copy().reset_index(drop=True)
+    # Step 1.3 — Filter to countable reefs (effective width >= MIN_EFF_WIDTH_M)
+    clusters = clusters[clusters["eff_wid_m"] >= MIN_EFF_WIDTH_M].copy().reset_index(drop=True)
 
     # Step 1.5 — Reproject to storage CRS
     clusters = clusters.to_crs(CRS_STORAGE)
@@ -223,6 +233,21 @@ def run_prepare():
 # Phase 2 — Full analysis helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _buffer_manual_points(path):
+    """Load a manual tag point shapefile, buffer to polygons, return GeoDataFrame.
+
+    Returns an empty GeoDataFrame if the file does not exist or is empty.
+    """
+    if not os.path.exists(path):
+        return gpd.GeoDataFrame(geometry=[], crs=CRS_STORAGE)
+    pts = gpd.read_file(path)
+    if pts.empty:
+        return gpd.GeoDataFrame(geometry=[], crs=CRS_STORAGE)
+    pts_metric = pts.to_crs(CRS_METRIC)
+    pts_metric["geometry"] = pts_metric["geometry"].buffer(BATHY_CHART_POINT_BUFFER_M)
+    return pts_metric.to_crs(CRS_STORAGE)
+
+
 def _match_clusters(clusters, ref_gdf):
     """Return the set of cluster_ids whose geometry intersects any feature in ref_gdf."""
     joined = gpd.sjoin(
@@ -235,18 +260,19 @@ def _match_clusters(clusters, ref_gdf):
 
 
 def _load_manual_tags(path, clusters):
-    """Return the set of cluster_ids that contain at least one point from path."""
-    if not os.path.exists(path):
+    """
+    Return the set of cluster_ids that overlap a buffered polygon (BATHY_CHART_POINT_BUFFER_M diameter) 
+    around each manual point. This allows for spatial uncertainty in manual tagging.
+    """
+    buffered = _buffer_manual_points(path)
+    if buffered.empty:
         return set()
-    pts = gpd.read_file(path)
-    if pts.empty:
-        return set()
-    pts = pts.to_crs(CRS_STORAGE)
+    # Use 'intersects' predicate for matching
     joined = gpd.sjoin(
         clusters[["cluster_id", "geometry"]],
-        pts[["geometry"]],
+        buffered[["geometry"]],
         how="inner",
-        predicate="contains",
+        predicate="intersects",
     )
     return set(joined["cluster_id"].unique())
 
@@ -357,7 +383,7 @@ def run_analysis():
     print("=" * 40)
 
     print(
-        f"\nCountable reef clusters (effective width >= 100 m, separated by > 100 m):"
+        f"\nCountable reef clusters (effective width >= {MIN_EFF_WIDTH_M} m, separated by > {CLUSTER_DISTANCE_M} m):"
     )
     print(f"  Coral Reef:  {len(coral)}")
     print(f"  Rocky Reef:  {len(rocky)}")
@@ -385,16 +411,115 @@ def run_analysis():
             n = (subset["known_stat"] == stat).sum()
             print(f"  {stat + ':':<22} {n}")
 
-    print(f"\nSize class breakdown of newly mapped reefs:")
+    print(f"\nSize class breakdown of all countable reefs:")
     for reef_type in ["Coral Reef", "Rocky Reef"]:
         print(f"  {reef_type}:")
-        s = newly_mapped[newly_mapped["RB_Type_L2"] == reef_type]
+        s = clusters[clusters["RB_Type_L2"] == reef_type]
         print(f"    Small (100\u2013300 m):       {(s['size_class'] == 'Small').sum()}")
         print(f"    Medium (300\u20131,000 m):    {(s['size_class'] == 'Medium').sum()}")
         print(f"    Large (1,000\u20133,000 m):   {(s['size_class'] == 'Large').sum()}")
         print(f"    Very large (> 3,000 m):  {(s['size_class'] == 'Very large').sum()}")
 
+    print(f"\nSize class breakdown of newly mapped reefs:")
+    for reef_type in ["Coral Reef", "Rocky Reef"]:
+        print(f"  {reef_type}:")
+        s_all = clusters[clusters["RB_Type_L2"] == reef_type]
+        s_new = newly_mapped[newly_mapped["RB_Type_L2"] == reef_type]
+        for sc_label, sc_key in [("Small (100\u2013300 m)", "Small"),
+                                  ("Medium (300\u20131,000 m)", "Medium"),
+                                  ("Large (1,000\u20133,000 m)", "Large"),
+                                  ("Very large (> 3,000 m)", "Very large")]:
+            n_all = (s_all["size_class"] == sc_key).sum()
+            n_new = (s_new["size_class"] == sc_key).sum()
+            pct = f"({100 * n_new / n_all:.1f}%)" if n_all > 0 else "(-)" 
+            print(f"    {sc_label + ':':<27} {n_new:>4}  {pct}")
+
     print(f"\nOutput: {ANALYSIS_SHP}")
+
+    # Step 2.8 — Missed-reefs analysis
+    print("\nStep 8: Missed-reefs analysis ...")
+    _run_missed_reefs_analysis(ahs, reefkim, unep, ga)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 3 — Missed-reefs analysis
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _run_missed_reefs_analysis(ahs, reefkim, unep, ga):
+    """Identify reference features that do not overlap any L2 feature.
+
+    Compiles all Tier 1 polygon and Tier 2 buffered point datasets into a single
+    GeoDataFrame, removes features that overlap any L2 feature (all types, not
+    just coral/rocky reef), clips to the study boundary, and saves the remainder
+    as potential missed reefs.
+    """
+    # Load unfiltered L2 features (all types including sand banks)
+    print("  Loading all L2 features (unfiltered) as mask ...")
+    l2_all = gpd.read_file(L2_INPUT)
+    l2_all = _fix_geom(l2_all).to_crs(CRS_STORAGE)
+    print(f"    {len(l2_all)} L2 features loaded.")
+
+    # Build combined reference dataset with source labels
+    print("  Compiling reference datasets ...")
+    ref_parts = []
+
+    def _tag(gdf, label):
+        g = gdf[["geometry"]].copy()
+        g["source"] = label
+        return g
+
+    ref_parts.append(_tag(ahs, "AHS"))
+    ref_parts.append(_tag(reefkim, "ReefKIM"))
+    ref_parts.append(_tag(unep, "UNEP"))
+    ref_parts.append(_tag(ga, "GA"))
+
+    # Tier 2 buffered points
+    for path, label in [
+        (BATHY_MAPPED, "Bathy mapped"),
+        (BATHY_INDICATED, "Bathy indicated"),
+        (CHART_MAPPED, "Chart mapped"),
+        (CHART_INDICATED, "Chart indicated"),
+    ]:
+        buffered = _buffer_manual_points(path)
+        if not buffered.empty:
+            ref_parts.append(_tag(buffered, label))
+
+    combined = pd.concat(ref_parts, ignore_index=True)
+    combined = gpd.GeoDataFrame(combined, crs=CRS_STORAGE)
+    print(f"    {len(combined)} total reference features compiled.")
+
+    # Remove features that overlap any L2 feature
+    print("  Removing reference features that overlap L2 ...")
+    joined = gpd.sjoin(
+        combined,
+        l2_all[["geometry"]],
+        how="left",
+        predicate="intersects",
+    )
+    # Features with no match have NaN in index_right
+    non_overlapping_idx = joined[joined["index_right"].isna()].index.unique()
+    missed = combined.loc[non_overlapping_idx].copy()
+    print(f"    {len(missed)} features do not overlap any L2 feature.")
+
+    # Clip to study boundary
+    print(f"  Clipping to study boundary: {STUDY_BOUNDARY}")
+    boundary = gpd.read_file(STUDY_BOUNDARY).to_crs(CRS_STORAGE)
+    missed = gpd.clip(missed, boundary)
+    missed = missed[missed.geometry.notna() & ~missed.geometry.is_empty].copy()
+    print(f"    {len(missed)} features within study boundary.")
+
+    # Save
+    missed.to_file(MISSED_REEFS_SHP)
+    print(f"  Saved: {MISSED_REEFS_SHP}")
+
+    # Summary table
+    print("\n--- Potential missed reefs (reference features not overlapping L2) ---")
+    summary = missed.groupby("source").size().reset_index(name="count")
+    summary = summary.sort_values("count", ascending=False).reset_index(drop=True)
+    for _, row in summary.iterrows():
+        print(f"    {row['source']:<18} {row['count']:>5}")
+    print(f"    {'Total':<18} {len(missed):>5}")
+    print(f"\n  Output: {MISSED_REEFS_SHP}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

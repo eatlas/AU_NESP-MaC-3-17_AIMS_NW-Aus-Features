@@ -35,6 +35,7 @@ version = v1-0
 | Bathymetry manual tags (indicated) | `data/{version}/in/prior-mapped-reefs/bathy-indicated.shp` | Point shapefile. Created manually in QGIS. |
 | Chart manual tags (mapped) | `data/{version}/in/prior-mapped-reefs/chart-mapped.shp` | Point shapefile. Created manually in QGIS. |
 | Chart manual tags (indicated) | `data/{version}/in/prior-mapped-reefs/chart-indicated.shp` | Point shapefile. Created manually in QGIS. |
+| Study boundary | `data/{version}/extras/study-boundary/NW-Aus-Features-study-boundary.shp` | Study area polygon used to clip missed-reefs output. |
 
 
 ## Outputs
@@ -43,6 +44,7 @@ version = v1-0
 |---|---|---|
 | Countable reef clusters | `working/{version}/A02/countable-reef-clusters.shp` | Clustered L2 reef polygons meeting the ≥ 100 m effective width threshold. Used for manual tagging in QGIS. CRS: EPSG:4283. |
 | Annotated reef clusters | `working/{version}/A02/unmapped-reefs-analysis.shp` | Final output with all source-match and classification attributes. CRS: EPSG:4283. |
+| Potential missed reefs | `working/{version}/A02/potential-missed-reefs.shp` | Reference dataset features (Tier 1 polygons and Tier 2 buffered points) that do not overlap any L2 feature and fall within the study boundary. Each row carries a `source` attribute identifying which dataset it came from. CRS: EPSG:4283. |
 | Template point shapefiles | `data/{version}/in/prior-mapped-reefs/*.shp` (× 4) | Empty point shapefiles created by `--prepare`. Not overwritten if they already exist. CRS: EPSG:4283. |
 | Invalid L2 features (geographic) | `working/{version}/A02/invalid-geom-L2-input.shp` | L2 features that are topologically invalid in EPSG:4283 after `make_valid`. Created only when invalid features are found. CRS: EPSG:4283. |
 | Invalid L2 features (metric) | `working/{version}/A02/invalid-geom-L2-metric.shp` | L2 features that become topologically invalid after reprojection to EPSG:3112. Created only when invalid features are found. CRS: EPSG:3112. |
@@ -194,10 +196,12 @@ Load each of the four manual tagging point shapefiles (if they exist and contain
 | `src_cht_i` | `data/{version}/in/prior-mapped-reefs/chart-indicated.shp` |
 
 For each point shapefile:
-1. Reproject points to EPSG:4283 if needed.
-2. Spatial join points to countable reef cluster polygons (`within` predicate, or equivalently join clusters to points with `contains`).
-3. Collect unique cluster IDs that received at least one point.
-4. Set the corresponding source flag to `True` for those clusters.
+1. Reproject points to **EPSG:3112** (metric CRS).
+2. Buffer each point to a **50 m radius** (100 m diameter) polygon to allow for spatial uncertainty in manual tagging.
+3. Reproject the buffered polygons back to **EPSG:4283**.
+4. Spatially join the buffered polygons to countable reef cluster polygons using the `intersects` predicate (i.e., a match occurs if the buffered polygon overlaps any part of a cluster).
+5. Collect unique cluster IDs that intersect at least one buffered polygon.
+6. Set the corresponding source flag to `True` for those clusters.
 
 If a point shapefile does not exist or is empty, the corresponding source flag remains `False` for all clusters.
 
@@ -275,7 +279,7 @@ Classification summary — All reefs:
   Previously indicated: {n}
   Newly mapped:         {n}
 
-Size class breakdown of newly mapped reefs:
+Size class breakdown of all countable reefs:
   Coral Reef:
     Small (100–300 m):       {n}
     Medium (300–1,000 m):    {n}
@@ -287,8 +291,46 @@ Size class breakdown of newly mapped reefs:
     Large (1,000–3,000 m):   {n}
     Very large (> 3,000 m):  {n}
 
+Size class breakdown of newly mapped reefs:
+  Coral Reef:
+    Small (100–300 m):       {n}  ({p}%)
+    Medium (300–1,000 m):    {n}  ({p}%)
+    Large (1,000–3,000 m):   {n}  ({p}%)
+    Very large (> 3,000 m):  {n}  ({p}%)
+  Rocky Reef:
+    Small (100–300 m):       {n}  ({p}%)
+    Medium (300–1,000 m):    {n}  ({p}%)
+    Large (1,000–3,000 m):   {n}  ({p}%)
+    Very large (> 3,000 m):  {n}  ({p}%)
+
 Output: working/{version}/A02/unmapped-reefs-analysis.shp
+
+Potential missed reefs (reference features not overlapping L2):
+    AHS              {n}
+    GA               {n}
+    ReefKIM          {n}
+    UNEP             {n}
+    Bathy mapped     {n}
+    Bathy indicated  {n}
+    Chart mapped     {n}
+    Chart indicated  {n}
+    Total            {n}
+
+  Output: working/{version}/A02/potential-missed-reefs.shp
 ```
+
+#### Step 2.8 — Missed-reefs analysis
+
+Identify reference dataset features that do not overlap any mapped L2 feature. These are potential reefs that exist in reference datasets but were not captured in the reef mapping.
+
+1. Load the full L2 dissolved reef features dataset (`working/{version}/12/NW-Features_{version}_RB-Type-L2.shp`) **without filtering by reef type**. All L2 types (coral reef, rocky reef, sand banks, etc.) are included as the mask. Fix geometries and reproject to EPSG:4283.
+2. Compile all reference datasets into a single GeoDataFrame with a `source` attribute:
+   - Tier 1 polygon datasets: AHS (pre-filtered to reef-like `NATIVE_CL`), ReefKIM, UNEP (bbox-clipped), GA — reuse the already-loaded and preprocessed versions from Step 2.2.
+   - Tier 2 manual tag point shapefiles: buffer each point by `BATHY_CHART_POINT_BUFFER_M` (250 m) in EPSG:3112 and reproject the resulting polygons back to EPSG:4283. Process all four files: bathy-mapped, bathy-indicated, chart-mapped, chart-indicated.
+3. For each feature in the combined reference dataset, test for spatial intersection with any L2 feature using `gpd.sjoin()` with a left join and `predicate="intersects"`. Features with no match (NaN in `index_right`) are retained as potential missed reefs.
+4. Clip the non-overlapping features to the study boundary (`data/{version}/extras/study-boundary/NW-Aus-Features-study-boundary.shp`). Drop null/empty geometries after clipping.
+5. Save the result to `working/{version}/A02/potential-missed-reefs.shp`.
+6. Print a summary table showing the count of potential missed-reef features per source dataset and the total.
 
 
 ## CLI Interface
@@ -338,7 +380,7 @@ When `--prepare` is given, only the template shapefiles are created. When omitte
 
 ## Overview
 
-This script analyses the overlap between the four Tier 1 automated reference datasets (AHS, ReefKIM, UNEP, GA Geotopo 250k) used by `A02-unmapped-reefs.py`. It reads the annotated reef clusters output and reports how much each dataset contributes to reducing the count of unmapped reefs, both individually and in combination with the other sources.
+This script analyses the contribution of each reference dataset (Tier 1 automated and Tier 2 manual) to the classification of countable reef clusters. It reads the annotated reef clusters output from `A02-unmapped-reefs.py` and reports individual coverage, cumulative contribution, and marginal drop for all eight source datasets.
 
 The script has no modes or flags. It reads the existing analysis shapefile and prints a structured report to the console.
 
@@ -347,7 +389,7 @@ The script has no modes or flags. It reads the existing analysis shapefile and p
 
 | Dataset | Path | Notes |
 |---|---|---|
-| Annotated reef clusters | `working/{version}/A02/unmapped-reefs-analysis.shp` | Output of `A02-unmapped-reefs.py`. Must contain boolean source flag columns `src_AHS`, `src_KIM`, `src_UNEP`, `src_GA`. |
+| Annotated reef clusters | `working/{version}/A02/unmapped-reefs-analysis.shp` | Output of `A02-unmapped-reefs.py`. Must contain boolean source flag columns `src_AHS`, `src_KIM`, `src_UNEP`, `src_GA`, `src_bath_m`, `src_bath_i`, `src_cht_m`, `src_cht_i`. |
 
 
 ## Outputs
@@ -370,70 +412,55 @@ version = v1-0
 ### Step 1 — Load annotated clusters
 
 1. Read `working/{version}/A02/unmapped-reefs-analysis.shp`.
-2. Cast source flag columns (`src_AHS`, `src_KIM`, `src_UNEP`, `src_GA`) to boolean.
-3. Compute `any_t1`: True if any of the four source flags is True.
+2. Cast all eight source flag columns to boolean.
+3. Compute summary flags:
+   - `any_t1`: True if any Tier 1 source flag is True.
+   - `any_mapped`: True if any Tier 1 or Tier 2 mapped source is True.
+   - `any_all`: True if any of the eight source flags is True.
 
 ### Step 2 — Individual dataset coverage
 
-For each of the four source flag columns, count the number of clusters where the flag is True. Report the count and the percentage of total countable reef clusters.
+For each of the eight source flag columns, count the number of clusters where the flag is True. Report the count and the percentage of total countable reef clusters. Group the output by tier: Tier 1 (automated), Tier 2 mapped, Tier 2 indicated.
 
-### Step 3 — Unique (exclusive) contribution
+### Step 3 — Cumulative contribution
 
-For each dataset, count the number of clusters matched **only** by that dataset, with all other source flags False. This is the irreplaceable contribution of each source.
+Add datasets one at a time and track the cumulative number of matched clusters. The order is:
+1. Tier 1 sources sorted by decreasing individual coverage.
+2. Tier 2 mapped sources sorted by decreasing individual coverage.
+3. Tier 2 indicated sources sorted by decreasing individual coverage.
 
-### Step 4 — Pairwise overlap
+For each addition, report the new cumulative total, the number of new clusters added, and the cumulative percentage.
 
-For each of the six pairs of datasets, count the number of clusters where both source flags are True. Report as a symmetric matrix.
+### Step 4 — Marginal drop analysis
 
-### Step 5 — Full intersection breakdown
-
-Group clusters by their membership pattern across the four boolean source flags. Each pattern is a 4-tuple of True/False values (AHS, ReefKIM, UNEP, GA). Count the number of clusters in each pattern and report sorted by descending count. This is equivalent to an UpSet-style intersection breakdown.
-
-### Step 6 — Cumulative contribution
-
-Sort the four datasets by decreasing individual coverage. Iteratively add each dataset and track the cumulative number of matched clusters after each addition. Report the number of new clusters added at each step and the cumulative percentage.
-
-### Step 7 — Marginal drop analysis
-
-For each dataset, compute how many clusters would become unmatched if that dataset were removed while retaining the other three. This equals the unique contribution from Step 3.
+For each of the eight datasets, compute how many clusters would lose **all** matches if that dataset were removed while retaining the other seven. The marginal drop treats mapped and indicated sources uniformly — it measures whether removing a dataset causes any cluster to become completely unmatched by any source. Report in the same order as the cumulative contribution.
 
 
 ## Print format
 
 ```
 ============================================================
- Tier 1 Dataset Overlap Analysis — {version}
+ Dataset Contribution Analysis — {version}
 ============================================================
 
 Total countable reef clusters: {n}
-Matched by at least one Tier 1 source: {n}
-Not matched by any Tier 1 source: {n}
+Matched by at least one Tier 1 source:      {n}
+Matched by at least one mapped source:       {n}
+Matched by at least one source (all):        {n}
+Not matched by any source:                   {n}
 
 --- Individual dataset coverage ---
-  AHS        {n}  ({p}%)
-  ReefKIM    {n}  ({p}%)
-  UNEP       {n}  ({p}%)
-  GA         {n}  ({p}%)
-
---- Unique contribution (matched ONLY by this dataset) ---
-  AHS        {n}  ({p}%)
-  ReefKIM    {n}  ({p}%)
-  UNEP       {n}  ({p}%)
-  GA         {n}  ({p}%)
-
---- Pairwise overlap (clusters matched by both) ---
-  AHS ∩ ReefKIM    {n}
-  AHS ∩ UNEP       {n}
-  AHS ∩ GA         {n}
-  ReefKIM ∩ UNEP   {n}
-  ReefKIM ∩ GA     {n}
-  UNEP ∩ GA        {n}
-
---- Full intersection breakdown ---
-  AHS   KIM   UNEP  GA      Count       %
-  ----------------------------------------
-  {Y/.}  {Y/.}  {Y/.}  {Y/.}  {count}  {%}
-  ...
+  Tier 1 (automated):
+    AHS              {n}  ({p}%)
+    ReefKIM          {n}  ({p}%)
+    UNEP             {n}  ({p}%)
+    GA               {n}  ({p}%)
+  Tier 2 (manual — mapped):
+    Bathy mapped     {n}  ({p}%)
+    Chart mapped     {n}  ({p}%)
+  Tier 2 (manual — indicated):
+    Bathy indicated  {n}  ({p}%)
+    Chart indicated  {n}  ({p}%)
 
 --- Cumulative contribution (adding datasets by coverage) ---
   + {dataset} → {n} matched (+{n} new, {p}% cumulative)
@@ -458,4 +485,4 @@ No arguments. Reads configuration from `config.ini`.
 
 - `geopandas`
 - `pandas`
-- Standard library: `configparser`, `os`, `itertools`
+- Standard library: `configparser`, `os`

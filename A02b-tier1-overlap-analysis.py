@@ -1,12 +1,15 @@
 """Script: A02b-tier1-overlap-analysis.py
+This script apportions the contribution each reference dataset (Tier 1 automated and Tier 2 manual) 
+makes to the total number of reefs that were previously known.
 
-Analyses the overlap between Tier 1 automated reference datasets (AHS, ReefKIM,
-UNEP, GA) in terms of which countable reef clusters each dataset matches.
+Analyses the contribution of each reference dataset (Tier 1 automated and Tier 2
+manual) to the classification of countable reef clusters.
 
 Reads the annotated reef clusters output from A02-unmapped-reefs.py and produces:
-  - Unique contribution of each dataset (clusters matched by that source only).
-  - Full intersection breakdown (UpSet-style) showing all 2^4 - 1 combinations.
-  - Cumulative contribution when adding datasets in order of coverage.
+  - Individual dataset coverage across all 8 sources.
+  - Cumulative contribution when adding datasets in order of coverage, with
+    mapped sources before indicated sources.
+  - Marginal drop analysis showing clusters lost if each dataset were removed.
 
 Usage:
     python A02b-tier1-overlap-analysis.py
@@ -14,7 +17,6 @@ Usage:
 
 import configparser
 import os
-from itertools import combinations
 
 import geopandas as gpd
 import pandas as pd
@@ -26,8 +28,22 @@ version = cfg.get("general", "version")
 
 ANALYSIS_SHP = f"working/{version}/A02/unmapped-reefs-analysis.shp"
 
-SOURCES = ["src_AHS", "src_KIM", "src_UNEP", "src_GA"]
-LABELS = {"src_AHS": "AHS", "src_KIM": "ReefKIM", "src_UNEP": "UNEP", "src_GA": "GA"}
+# All eight source flag columns, grouped by tier and type
+TIER1_SOURCES = ["src_AHS", "src_KIM", "src_UNEP", "src_GA"]
+TIER2_MAPPED = ["src_bath_m", "src_cht_m"]
+TIER2_INDICATED = ["src_bath_i", "src_cht_i"]
+ALL_SOURCES = TIER1_SOURCES + TIER2_MAPPED + TIER2_INDICATED
+
+LABELS = {
+    "src_AHS": "AHS",
+    "src_KIM": "ReefKIM",
+    "src_UNEP": "UNEP",
+    "src_GA": "GA",
+    "src_bath_m": "Bathy mapped",
+    "src_bath_i": "Bathy indicated",
+    "src_cht_m": "Chart mapped",
+    "src_cht_i": "Chart indicated",
+}
 
 
 def main():
@@ -36,83 +52,72 @@ def main():
     n_total = len(gdf)
 
     # Boolean columns for each source
-    for col in SOURCES:
+    for col in ALL_SOURCES:
         gdf[col] = gdf[col].astype(bool)
 
-    # Combined: matched by at least one Tier 1 source
-    gdf["any_t1"] = gdf[SOURCES].any(axis=1)
-    n_any = gdf["any_t1"].sum()
-    n_none = n_total - n_any
+    # Combined: matched by at least one source
+    gdf["any_t1"] = gdf[TIER1_SOURCES].any(axis=1)
+    gdf["any_mapped"] = gdf[TIER1_SOURCES + TIER2_MAPPED].any(axis=1)
+    gdf["any_all"] = gdf[ALL_SOURCES].any(axis=1)
+
+    n_any_t1 = int(gdf["any_t1"].sum())
+    n_any_mapped = int(gdf["any_mapped"].sum())
+    n_any_all = int(gdf["any_all"].sum())
 
     print("\n" + "=" * 60)
-    print(f" Tier 1 Dataset Overlap Analysis — {version}")
+    print(f" Dataset Contribution Analysis — {version}")
     print("=" * 60)
 
     print(f"\nTotal countable reef clusters: {n_total}")
-    print(f"Matched by at least one Tier 1 source: {n_any}")
-    print(f"Not matched by any Tier 1 source: {n_none}")
+    print(f"Matched by at least one Tier 1 source:      {n_any_t1}")
+    print(f"Matched by at least one mapped source:       {n_any_mapped}")
+    print(f"Matched by at least one source (all):        {n_any_all}")
+    print(f"Not matched by any source:                   {n_total - n_any_all}")
 
     # ── 1. Individual coverage ─────────────────────────────────────────────
     print("\n--- Individual dataset coverage ---")
-    for col in SOURCES:
-        n = gdf[col].sum()
-        print(f"  {LABELS[col]:<10} {n:>5}  ({100 * n / n_total:.1f}%)")
+    print("  Tier 1 (automated):")
+    for col in TIER1_SOURCES:
+        n = int(gdf[col].sum())
+        print(f"    {LABELS[col]:<18} {n:>5}  ({100 * n / n_total:.1f}%)")
+    print("  Tier 2 (manual — mapped):")
+    for col in TIER2_MAPPED:
+        n = int(gdf[col].sum())
+        print(f"    {LABELS[col]:<18} {n:>5}  ({100 * n / n_total:.1f}%)")
+    print("  Tier 2 (manual — indicated):")
+    for col in TIER2_INDICATED:
+        n = int(gdf[col].sum())
+        print(f"    {LABELS[col]:<18} {n:>5}  ({100 * n / n_total:.1f}%)")
 
-    # ── 2. Unique (exclusive) contribution ─────────────────────────────────
-    print("\n--- Unique contribution (matched ONLY by this dataset) ---")
-    for col in SOURCES:
-        others = [c for c in SOURCES if c != col]
-        mask = gdf[col] & ~gdf[others].any(axis=1)
-        n = mask.sum()
-        print(f"  {LABELS[col]:<10} {n:>5}  ({100 * n / n_total:.1f}%)")
-
-    # ── 3. Pairwise overlap ────────────────────────────────────────────────
-    print("\n--- Pairwise overlap (clusters matched by both) ---")
-    for a, b in combinations(SOURCES, 2):
-        n = (gdf[a] & gdf[b]).sum()
-        print(f"  {LABELS[a]} ∩ {LABELS[b]:<10} {n:>5}")
-
-    # ── 4. Full intersection breakdown (UpSet-style) ───────────────────────
-    # Each cluster has a membership pattern like (True, False, True, False)
-    # Group by that pattern and count.
-    print("\n--- Full intersection breakdown ---")
-    print(f"  {'AHS':<5} {'KIM':<5} {'UNEP':<5} {'GA':<5}  {'Count':>6}  {'%':>6}")
-    print("  " + "-" * 40)
-
-    gdf["_pattern"] = list(zip(*(gdf[c] for c in SOURCES)))
-    breakdown = gdf.groupby("_pattern").size().reset_index(name="count")
-    breakdown = breakdown.sort_values("count", ascending=False).reset_index(drop=True)
-
-    for _, row in breakdown.iterrows():
-        pattern = row["_pattern"]
-        count = row["count"]
-        flags = "  ".join(("Y" if v else ".").ljust(3) for v in pattern)
-        print(f"  {flags}  {count:>6}  {100 * count / n_total:>5.1f}%")
-
-    # ── 5. Cumulative (additive) contribution ──────────────────────────────
-    # Add datasets one at a time in order of individual coverage (largest first)
+    # ── 2. Cumulative (additive) contribution ──────────────────────────────
+    # Tier 1 sorted by coverage, then Tier 2 mapped sorted by coverage,
+    # then Tier 2 indicated sorted by coverage.
     print("\n--- Cumulative contribution (adding datasets by coverage) ---")
-    coverage_order = sorted(SOURCES, key=lambda c: gdf[c].sum(), reverse=True)
+    t1_order = sorted(TIER1_SOURCES, key=lambda c: gdf[c].sum(), reverse=True)
+    t2m_order = sorted(TIER2_MAPPED, key=lambda c: gdf[c].sum(), reverse=True)
+    t2i_order = sorted(TIER2_INDICATED, key=lambda c: gdf[c].sum(), reverse=True)
+    cumulative_order = t1_order + t2m_order + t2i_order
+
     cumulative = pd.Series(False, index=gdf.index)
-    for col in coverage_order:
+    for col in cumulative_order:
         prev_total = cumulative.sum()
         cumulative = cumulative | gdf[col]
         new_total = cumulative.sum()
         added = new_total - prev_total
         print(
-            f"  + {LABELS[col]:<10} → {int(new_total):>5} matched "
+            f"  + {LABELS[col]:<18} → {int(new_total):>5} matched "
             f"(+{int(added):>4} new, {100 * new_total / n_total:.1f}% cumulative)"
         )
 
-    # ── 6. Marginal drop analysis ──────────────────────────────────────────
-    # If we removed each dataset, how many clusters would become unmatched?
+    # ── 3. Marginal drop analysis ──────────────────────────────────────────
+    # If we removed each dataset, how many clusters would lose all matches?
     print("\n--- Marginal drop (clusters lost if this dataset were removed) ---")
-    for col in SOURCES:
-        others = [c for c in SOURCES if c != col]
-        with_all = gdf[SOURCES].any(axis=1).sum()
-        without = gdf[others].any(axis=1).sum()
+    for col in cumulative_order:
+        others = [c for c in ALL_SOURCES if c != col]
+        with_all = int(gdf[ALL_SOURCES].any(axis=1).sum())
+        without = int(gdf[others].any(axis=1).sum())
         drop = with_all - without
-        print(f"  Remove {LABELS[col]:<10} → lose {drop:>4} clusters ({100 * drop / n_total:.1f}%)")
+        print(f"  Remove {LABELS[col]:<18} → lose {drop:>4} clusters ({100 * drop / n_total:.1f}%)")
 
     print()
 
