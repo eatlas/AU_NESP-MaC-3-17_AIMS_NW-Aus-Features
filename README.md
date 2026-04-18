@@ -55,7 +55,7 @@ cd AU_NESP-MaC-3-17_AIMS_NW-Aus-Features
 
 ## 3. Using Conda 
 
-1. Create the Conda environment. This step can take 10 min. If you are using Anaconda open the default Anaconda Prompt, change to the project directory 
+1. Create the Conda environment. 
     ```bash
     cd {path to the AU_NESP-MaC-3-17_AIMS_NW-Aus-Features dataset} 
     conda env create -f environment.yml
@@ -65,12 +65,51 @@ cd AU_NESP-MaC-3-17_AIMS_NW-Aus-Features
     conda activate nw-aus-feat-env
     ```
 
-## 4. Editing in QGIS
+## 4. Download all the input and output data
+Run the following scripts to download all the input and output files associated with the version specified in the `config.ini`:
+
+```bash
+python 01a-download-input-data.py
+```
+
+Download the satellite imagery. This will take a while as it is over 200 GB of data. See [Moving the 3rd party data download out of One Drive using a Symbolic link (Windows)](#moving-the-3rd-party-data-download-out-of-one-drive-using-a-symbolic-link-windows) if you want to store the data to a non-standard location.
+    
+```bash
+python 01b-download-sentinel2.py
+```
+
+Setup the virtual rasters for the satellite imagery. This is so that each mosaic of satellite images can be treated as a layer.
+
+```bash
+python 01c-create-virtual-rasters.py
+```
+
+## 5. Open in QGIS
+
+Load `NWF1-working-maps-{version}.qgz` into QGIS. This is the file that was used for editing the reef mapping, as well as publication maps. It has references to all the input and output data files and expects all the data relative to its location. In QGIS the `Reef-Boundaries_{version}_edit` layer is primary source of truth for all modifications to the reef boundaries or classifications. 
+
+## 6. Convert modifications to the output
+When all modifications to `Reef-Boundaries_{version}_edit.shp` are complete run:
+
+```bash
+python 10-clip-land.py
+python 11-expand-attribs.py
+python 12-make-RB_Type_L2.py
+```
+This will trim the `Reef-Boundaries_{version}_edit` polygons against the coastline (`data/{version}/in-3p/AU_AIMS_Coastline_50k_2024.Split.AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_split.shp`), use the `data/{version}/in/RB_Type_L3_crosswalk.csv` to expand the classification attributes to include the Natural Values Common Language and the Seamap Australia classifications, and generate a version with simplified classification. This saves the output shapefile to the `data/{version}/out/` folder.
+
+## 7. Analysis
+You can then run the analysis scripts:
+- `A02-unmapped-reefs.py`: determine an estimate of countable reefs and reef area, along with how many are previously unmapped.
+- `A02b-tier1-overlap-analysis.py`: determine the percentage of previously mapped reefs contributed by each existing reef mapping data source.
+- `A03-version-changes.py`: determine how this version is different to the previous version. For this to work you will need to have a copy of the previous version of the dataset.
+
 If you are making a new version of the dataset then you should start with the previous 'edit' version, not the final processed version. 
+
 ### v0-4 processing notes
 For v0-4 we needed to adjust the classification so `09-v0-4-class-cross-walk.py` was used to read `working/02/Reef_Boundaries_Clean.shp`, the previous editable version of the dataset. `v0-3` release didn't have an editable version because it focused on merging datasets together. This script created saved the conversion to `working/09/Reef-Boundaries_v0-4.shp`, which was manually copied to `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp`. This manual copy was done to prevent an accidental overwrite of any manual edits if the script was run once again. `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp` was then manually edited in QGIS to fix issues in the previous version. This shapefile is the current editable version. The final data file `data/v0-4/out/NW-Aus-Features_v0-4.shp` is derived from the edit version, by running `10-v0-4-clip-land.py`.
 
-### v1-0 process notes
+### v1-0 processing notes
 We started with copying over the `data/v0-4/` to `data/v1-0`. We updated the paths in the QGIS files to fix path dependencies. See section 'Notes on making a new version of this dataset' for more details on setting up a new version. We then made edits to the `Reef-Boundaries_v1-0_edit.shp` dataset, recording progress in the `CHANGELOG.md`. The final output products were made using `10-clip-land.py`, `11-expand-attribs.py` and `12-make-RB_Type_L2.py`. Analysis of the changes were done using `A02-unmapped-reefs.py`, `A02b-tier1-overlap-analysis.py` and `A03-version-changes.py`. 
 
 If you were to start from scratch from this version then you would download the repo, run 01a, 01b, 01c, then remake the outputs by running scripts 10, 11, and 12. Scripts 02, 03, 04, 05, 06, 07, 08, and 09 are only relevant to earlier versions of the dataset and are provided as documentation of the history of the processing.
@@ -117,8 +156,7 @@ In my case I needed to delete `C:\Users\elawrey\Anaconda3\envs\nw-aus-feat-env`
 # Description of scripts
 
 - **`01-download-input-data.py`**
-This script downloads the third party datasets used in the preview maps, such as the world land area, the GBR reefs, the Coral Sea vegetation and bathymetry datasets. This script downloads the data directly from the original source data services and stores it in `C:\Data\2025\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features\working`. This is the folder where the QGIS `preview-maps.qgz` will look for the data files. If you download to a different location you will need to adjust the paths in QGIS. This script should download all data files used to recreate the preview maps and plots used for reporting purposes. 
-`data_downloader.py` is a utility library that is used by `01-download-preview-map-data.py`.
+This script downloads all the data needed to work on this project (except for the satellite imagery). This includes custom input data and third party datasets used in the publication maps and analysis scripts. This script downloads the data directly from the original source data services. It stores all the data in `data/{version}`, based on the version specified in `config.ini`. 
 
 - **`01a-download-sentinel2.py`**
 Downloads Sentinel-2 satellite imagery composites (15th percentile and low tide imagery) for northern Australia and the Great Barrier Reef.
@@ -253,7 +291,7 @@ central and inside the feature polygon to ensure this spatial join works correct
 polygon aims to assist the validator in understanding the extent of the feature without 
 biasing them to the exact geometry of the feature. The geometry vertices should be randomly 
 fuzzed by approximately 50 m and simplified to a approximately 50 m allowable error.
-3. Boundary-error: One or more points that line on a random point of the the boundary of the feature polygon. 
+3. Boundary-error: One or more points that lie on a random point of the the boundary of the feature polygon. 
 These points will be repositioned by the validator to lie on the closest best estimate of the 
 true boundary of the feature. To reduce bias, these points should be randomly
 chosen from the simplified version of the polygon. These points can lie on the lines
