@@ -6,20 +6,29 @@ import configparser
 # Read configuration from config.ini
 config = configparser.ConfigParser()
 config.read('config.ini')
-download_path = config.get('general', 'in_3p_path')
+in_3p_path = config.get('general', 'in_3p_path')
+data_path = config.get('paths', 'data_path')
 version = config.get('general', 'version')
 
 # Create an instance of the DataDownloader class
-downloader = DataDownloader(download_path=download_path)
+downloader = DataDownloader(download_path=data_path)
 
 print("Downloading source data files. This will take a while ...")
 
+# --------------------------------------------------------
+# Download the input and output data for the current version of the dataset. This will all download in-3p-mirror
+# which includes the ReefKIM dataset.
+direct_download_url = f'https://nextcloud.eatlas.org.au/public.php/dav/files/ZbxtYci3A6WYnHc/{version}?accept=zip'
+downloader.download_and_unzip(direct_download_url, version, flatten_directory=True)
+
+
+downloader.download_path = in_3p_path  # Switch to the in_3p path for downloading third-party datasets
 # --------------------------------------------------------
 #Lawrey, E. P., Stewart M. (2016) Complete Great Barrier Reef (GBR) Reef and Island Feature boundaries including Torres Strait (NESP TWQ 3.13, AIMS, TSRA, GBRMPA) [Dataset]. Australian Institute of Marine Science (AIMS), Torres Strait Regional Authority (TSRA), Great Barrier Reef Marine Park Authority [producer]. eAtlas Repository [distributor]. https://eatlas.org.au/data/uuid/d2396b2c-68d4-4f4b-aab0-52f7bc4a81f5
 # This was needed to determine the potential overlap point between the existing Torres Strait reef mapping
 # and the new mapping in the Gulf of Carpentaria.
 direct_download_url = 'https://nextcloud.eatlas.org.au/s/xQ8neGxxCbgWGSd/download/TS_AIMS_NESP_Torres_Strait_Features_V1b_with_GBR_Features.zip'
-downloader.download_and_unzip(direct_download_url, 'GBR_AIMS_Complete-GBR-feat_V1b')
+downloader.download_and_unzip(direct_download_url, 'Complete-GBR-feat_V1b')
 
 
 # --------------------------------------------------------
@@ -38,13 +47,16 @@ downloader.download_and_unzip(direct_download_url, 'GBR_AIMS_Complete-GBR-feat_V
 # https://eatlas.org.au/geonetwork/srv/eng/catalog.search#/metadata/c5438e91-20bf-4253-a006-9e9600981c5f
 # Hammerton, M., & Lawrey, E. (2024). Australian Coastline 50K 2024 (NESP MaC 3.17, AIMS) (2nd Ed.) [Data set]. eAtlas. https://doi.org/10.26274/qfy8-hj59
 # This is used for clipping out land areas from the manually edited reef boundaries
-direct_download_url = 'https://nextcloud.eatlas.org.au/s/DcGmpS3F5KZjgAG/download?path=%2FV1-1%2F&files=Split'
+
+# old direct_download_url = 'https://nextcloud.eatlas.org.au/s/DcGmpS3F5KZjgAG/download?path=%2FV1-1%2F&files=Split'
+direct_download_url = 'https://nextcloud.eatlas.org.au/public.php/dav/files/DcGmpS3F5KZjgAG/V1-1/Split/?accept=zip'
 
 downloader.download_and_unzip(direct_download_url, 'AU_AIMS_Coastline_50k_2024', subfolder_name='Split', flatten_directory=True)
 
 # Use this version for overview maps and faster intermediate processing steps where the finest
 # precision is not needed.
-direct_download_url = 'https://nextcloud.eatlas.org.au/s/DcGmpS3F5KZjgAG/download?path=%2FV1-1%2F&files=Simp'
+# old direct_download_url = 'https://nextcloud.eatlas.org.au/s/DcGmpS3F5KZjgAG/download?path=%2FV1-1%2F&files=Simp'
+direct_download_url = 'https://nextcloud.eatlas.org.au/public.php/dav/files/DcGmpS3F5KZjgAG/V1-1/Simp/?accept=zip'
 downloader.download_and_unzip(direct_download_url, 'AU_AIMS_Coastline_50k_2024', subfolder_name='Simp', flatten_directory=True)
 
 # --------------------------------------------------------
@@ -85,13 +97,16 @@ downloader.download_and_unzip(direct_download_url, 'World_WCMC_CoralReefs2021_v4
 # https://metadata.imas.utas.edu.au/geonetwork/srv/eng/catalog.search#/metadata/69e9ac91-babe-47ed-8c37-0ef08f29338a 
 # on 31 July 2025
 # These are 22GB and 37 GB files so they will take a while to download.
-# It is used for identifying already mapped reefs (see A02-unmapped-reefs.py)
-direct_download_url = 'https://data.imas.utas.edu.au/attachments/69e9ac91-babe-47ed-8c37-0ef08f29338a/bathymetry/01_shallow_bathy.tif'
-downloader.download(direct_download_url, os.path.join(downloader.download_path, 'MultiRes-Bathy-EEZ_2024', '01_shallow_bathy.tif'))
+# It is used for identifying already mapped reefs (see A02-unmapped-reefs.py), however the bulk of the checking
+# was done using AusBathyTopo 250 m.
+SKIP_BATHY_DOWNLOAD = True  # Set to True to skip downloading the bathymetry files, which are very large and take a long time to download. This is useful for testing and development when you don't need the full dataset.
+if not SKIP_BATHY_DOWNLOAD:
+    direct_download_url = 'https://data.imas.utas.edu.au/attachments/69e9ac91-babe-47ed-8c37-0ef08f29338a/bathymetry/01_shallow_bathy.tif'
+    downloader.download(direct_download_url, os.path.join(downloader.download_path, 'MultiRes-Bathy-EEZ_2024', '01_shallow_bathy.tif'))
 
-# We need to mesophotic bathymetry for 30-70m depth range as a lot of deeper reefs are in this range.
-direct_download_url = 'https://data.imas.utas.edu.au/attachments/69e9ac91-babe-47ed-8c37-0ef08f29338a/bathymetry/02_mesophotic_bathy.tif'
-downloader.download(direct_download_url, os.path.join(downloader.download_path, 'MultiRes-Bathy-EEZ_2024', '02_mesophotic_bathy.tif'))
+    # We need to mesophotic bathymetry for 30-70m depth range as a lot of deeper reefs are in this range.
+    direct_download_url = 'https://data.imas.utas.edu.au/attachments/69e9ac91-babe-47ed-8c37-0ef08f29338a/bathymetry/02_mesophotic_bathy.tif'
+    downloader.download(direct_download_url, os.path.join(downloader.download_path, 'MultiRes-Bathy-EEZ_2024', '02_mesophotic_bathy.tif'))
 
 # --------------------------------------------------------
 # Geoscience Australia. (2024).AusBathyTopo (Australia) 250m 2024 - A national-scale depth model (20240011C). 
@@ -104,6 +119,7 @@ downloader.download_and_unzip(direct_download_url, 'AusBathyTopo-250m_2024')
 # GEODATA TOPO 250K Series 3 (Shape file format)
 # Geoscience Australia, (2006) GEODATA TOPO 250K Series 3 (Shape file format). Geoscience Australia, Canberra. 
 # https://pid.geoscience.gov.au/dataset/ga/64058
+# The marine hazards layer of this dataset is used to identify already mapped reefs. Used by A02-unmapped-reefs.py
 direct_download_url = 'https://d28rz98at9flks.cloudfront.net/64058/64058.zip'
 downloader.download_and_unzip(direct_download_url, 'GA_GeoTopo250k_S3')
 
@@ -154,21 +170,30 @@ downloader.download_and_unzip(
 # --------------------------------------------------------
 # Natural Earth. (2025). Natural Earth 1:50m Admin 0 – Countries [Shapefile]. https://www.naturalearthdata.com/downloads/50m-cultural-vectors/
 # https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/50m/cultural/ne_50m_admin_0_countries.zip
+# This dataset is used for creating base land maps, particularly for neighbouring countries other than Australia.
 downloader.download_and_unzip(
     'https://naciscdn.org/naturalearth/50m/cultural/ne_50m_admin_0_countries.zip',
     'natural-earth-admin-0-countries-50m',
     flatten_directory=True
 )
 
-
 # --------------------------------------------------------
-# Download the input and output dataset for the current version of the dataset.  This will all download in-3p-mirror
-# which includes the ReefKIM dataset.
-# If you are developing a new version of the dataset you will want to run this script prior to updating
-# the version number in config.ini.
-downloader.download_path = 'data'
-direct_download_url = f'https://nextcloud.eatlas.org.au/s/ZbxtYci3A6WYnHc/download?path=%2F{version}'
-downloader.download_and_unzip(direct_download_url, version, flatten_directory=True)
+# Department of Climate Change, Energy, the Environment and Water. (2025). 
+# Collaborative Australian Protected Areas Database (CAPAD) 2024 - Marine. [Data set].
+# https://fed.dcceew.gov.au/datasets/erin::collaborative-australian-protected-areas-database-capad-2024-marine/about
+# This dataset is available under the CC-BY data licencing model and users are required to acknowledge 
+# the Australian Government, Department of Climate Change, Energy, the Environment and Water as the source 
+# of the data in any of their uses. When citing the data please use 'Collaborative Australian Protected 
+# Areas Database (CAPAD) 2024, Commonwealth of Australia 2025'.
+# This dataset is used in A02-unmapped-reefs to determine what fraction of reefs is within protected areas.
+# We need to keep the directory name very short due to the long file names in the CAPAD dataset.
+downloader.download_and_unzip(
+    'https://hub.arcgis.com/api/v3/datasets/0b6e7b6c48a64a3a82c225fa48aee13d_1/downloads/data?format=shp&spatialRefId=4283&where=1%3D1',
+    'CAPAD-2024',
+    flatten_directory=True
+)
+
+
 
 
 
