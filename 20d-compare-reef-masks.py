@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-This script is not yet used. 
+This script is not yet used.
 
 Script Name: 07d-compare-reef-masks.py
 
@@ -16,7 +16,7 @@ Usage:
 python 07d-compare-reef-masks.py [--sensitivity DETECTORS] [--version VERSION]
 
 Arguments:
---sensitivity: Sensitivity levels from 06c (default: 'High-Medium'). 
+--sensitivity: Sensitivity levels from 06c (default: 'High-Medium').
 --version:   Version of the input data to process (default: '1').
 
 Example:
@@ -37,11 +37,11 @@ def main():
     print("WARNING: This script is not yet used. It is a work in progress and may not be fully functional. Use with caution.")
     parser = argparse.ArgumentParser(description='Compare Shallow-mask and rough-reef-mask shapefiles to identify false positives and negatives in platform reefs.')
     #parser.add_argument('--region', type=str, default='NorthernAU', help="Region to process.")
-    parser.add_argument('--sensitivity', type=str, default='Medium', 
+    parser.add_argument('--sensitivity', type=str, default='Medium',
         help="Selects which of the detector set to process. Possible options 'Low', 'Medium', 'High'"
     )
     parser.add_argument('--version', type=str, default='1', help="Which version of the input data to process. Must match that from 05-create-shallow-and-reef-area-masks.")
-    #parser.add_argument('--sigma', type=str, default='40', 
+    #parser.add_argument('--sigma', type=str, default='40',
     #        help="Size of the blurring used to create the water estimate. Used to find the water estimate files. Should match that used in #04-create-water-image_with_mask.py."
     #    )
     args = parser.parse_args()
@@ -52,12 +52,12 @@ def main():
     land_mask_shp_path = 'data/in/AU_AIMS_Coastline_50k_2024/Split/AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_split.shp'
     auto_mask_path = f'data/out/V{args.version}/AU_NESP-MaC-3-17_AIMS_Shallow-mask_{args.sensitivity}_V{args.version}.shp'
     #auto_mask_path = f'working-data/deprecate/06-merge/AU_NESP-MaC-3-17_AIMS_Shallow-mask_{args.sensitivity}_V{args.version}.shp'
-    
+
     rough_platform_reefs_path = "working-data/07-qaqc/rough_platform_reefs.shp"
-    
+
     auto_platform_reefs_with_fp_path = f"working-data/07-qaqc/Shallow-mask_V{args.version}_{args.sensitivity}_auto-platform.shp"
     fpfn_combined_path = f"working-data/07-qaqc/Shallow-mask_V{args.version}_{args.sensitivity}_fpfn.shp"
-    
+
     #rough_reef_mask_path = 'in-data/AU_Rough-reef-shallow-mask/AU_AIMS_NESP-MaC-3-17_Rough-reef-shallow-mask_Base.shp'
     #auto_mask_path = 'in-data/AU_Rough-reef-shallow-mask/AU_AIMS_NESP-MaC-3-17_Rough-reef-shallow-mask_Test.shp'
 
@@ -87,7 +87,7 @@ def main():
     # Reset indices to ensure uniqueness. This sets the index to [0, 1, .. n-1]
     rough_reef_mask = rough_reef_mask.reset_index(drop=True)
     rough_reef_mask['rrm_index'] = rough_reef_mask.index
-    
+
     land_mask = land_mask.reset_index(drop=True)
     land_mask['lm_index'] = land_mask.index
 
@@ -101,15 +101,15 @@ def main():
 
     # Identify rough_reef_mask features not touching coastline
     print("  Identify reefs not touching coastline...")
-    # Select rough_reef_mask rows, where they are not in the list of ones touching the coast. 
+    # Select rough_reef_mask rows, where they are not in the list of ones touching the coast.
     rough_platform_reefs = rough_reef_mask[~rough_reef_mask['rrm_index'].isin(rough_coastal_reef_indices)].copy()
-    
+
 
 
     print("Creating exclusion zone from coastline and rough-reef-mask coastal features...")
     print("  combine rough-reef-mask and land-mask features...")
     # Combine land_mask and rough_coastal_reefs into a single GeoDataFrame
-    # Merge rough_reef_mask elements that are touching the coastline to the lask mask polygons.
+    # Merge rough_reef_mask elements that are touching the coastline to the last mask polygons.
     exclusion_geoms = pd.concat([land_mask[['geometry']], rough_reef_mask.loc[rough_reef_mask['rrm_index'].isin(rough_coastal_reef_indices), ['geometry']]], ignore_index=True)
     exclusion_geoms = gpd.GeoDataFrame(exclusion_geoms, crs=rough_reef_mask.crs)
 
@@ -123,14 +123,14 @@ def main():
     print("  Spatial join between auto-mask and exclusion geometry")
     # Retain auto-mask features that overlap the exclusion geometry (land and coastal rough reef mask features)
     auto_exclusion_join = gpd.sjoin(auto_mask, exclusion_geoms, how='inner', predicate='intersects')
-    
+
     # IDs of the auto-mask features that need to be excluded
     auto_exclusion_indices = auto_exclusion_join['am_index'].unique()
 
     # Identify auto_mask features not touching exclusion zone
     print("  Identify auto mask features not touching exclusion zone")
     auto_platform_reefs = auto_mask[~auto_mask['am_index'].isin(auto_exclusion_indices)].copy()
-    
+
 
 
     print("Comparing auto-mask platform reefs with rough-reef-mask platform reefs...")
@@ -169,19 +169,19 @@ def main():
     false_positives = auto_platform_reefs[~auto_platform_reefs['apr_index'].isin(true_positive_indices)]
 
     # Now, for rough_platform_reefs, find those that are detected (intersecting with auto_platform_reefs)
-    # Look for false negatives. Find the reefs that overlap between between the rough_platforms 
-    # and the auto_platforms. 
+    # Look for false negatives. Find the reefs that overlap between between the rough_platforms
+    # and the auto_platforms.
     detected_reefs_join = gpd.sjoin(rough_platform_reefs, auto_platform_reefs, how='inner', predicate='intersects')
     # IDs of all the reefs that overlap. The missing reefs won't be in this list.
     detected_reef_indices = detected_reefs_join['rpr_index'].unique()
 
     # Detected reefs
     detected_reefs = rough_platform_reefs.loc[rough_platform_reefs['rpr_index'].isin(detected_reef_indices)]
-    
+
     print("Looking for false negatives")
     # False negatives: rough_platform_reefs not in detected_reefs
     false_negatives = rough_platform_reefs[~rough_platform_reefs['rpr_index'].isin(detected_reef_indices)]
-    
+
     # Add a column indicating false negatives (1 = False Negative, 0 = Not False Negative)
     rough_platform_reefs['is_false_negative'] = 0
     rough_platform_reefs.loc[rough_platform_reefs['rpr_index'].isin(false_negatives['rpr_index']), 'is_false_negative'] = 1
@@ -207,13 +207,13 @@ def main():
         print(f"Saving rough platform reefs to {rough_platform_reefs_path}...")
         os.makedirs(os.path.dirname(rough_platform_reefs_path), exist_ok=True)
         rough_platform_reefs.to_file(rough_platform_reefs_path, driver="ESRI Shapefile")
-    
+
     # Add a column indicating false positives (1 = False Positive, 0 = Not False Positive)
     auto_platform_reefs['is_false_positive'] = 0
     auto_platform_reefs.loc[auto_platform_reefs['apr_index'].isin(false_positives['apr_index']), 'is_false_positive'] = 1
 
     # Save the updated auto_platform_reefs with false positives
-    
+
     if SAVE_DEBUG_SHP:
         print(f"Saving auto platform reefs with false positives to {auto_platform_reefs_with_fp_path}...")
         os.makedirs(os.path.dirname(auto_platform_reefs_with_fp_path), exist_ok=True)
@@ -226,7 +226,7 @@ def main():
     num_false_positives = len(false_positives)
     num_false_negatives = len(false_negatives)
 
-    
+
     true_positive_rate = (num_true_positives / total_rough_platform) * 100 if total_rough_platform > 0 else 0
     false_positive_rate = (num_false_positives / total_auto_platform) * 100 if total_auto_platform > 0 else 0
 

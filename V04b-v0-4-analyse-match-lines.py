@@ -6,13 +6,13 @@ This script is the second processing stage in determining the distribution of bo
 errors. In this analysis we compare the v0-4 version of the dataset with a duplicate
 independent mapping of the reefs (AU_AIMS_NESP-MaC-3-17_Rough-reef-shallow-mask_87hr.shp).
 This comparison is limited to masked areas determined by Boundary-comp-regions_v0-4-to-v0-1-EL.shp.
-This mask is to limit the comparision to areas where the Rough Reef Mask does not include
+This mask is to limit the comparison to areas where the Rough Reef Mask does not include
 any shallow sediments areas and the digitisation accuracy is reasonably good.
 This duplicate mapping allows us to understand the variability in the feature boundaries
 and to understand the distribution in the boundary errors. The goal is to answer the question:
 Given that we recorded a single EdgeAcc_m value for each reef feature, how does this single
 value compare with the full distribution of errors. Does the EdgeAcc_m represent the worst
-10% of the boundary error or align better with the worst 25%? How does it relate to the 
+10% of the boundary error or align better with the worst 25%? How does it relate to the
 typical boundary error. Can we calculate a scalar that estimates the typical boundary
 error from the EdgeAcc_m value? The goal of this analysis is to allow us to estimate
 the distribution of boundary errors from the estimated EdgeAcc_m value. This will allow
@@ -22,12 +22,12 @@ in counting reefs, which is influenced by the reef area and the reef proximity t
 
 The processing was split into two scripts to limit the complexity of each script. This script
 uses the matched line segments produced by V04-v0-4-assess-edgeacc.py. Summary statistics
-are calculated for each reef feature and these statistics are joined back to the 
+are calculated for each reef feature and these statistics are joined back to the
 NW-Aus-Feat_v0-4_RB_Type_L1_clip.shp, which is a filtered and dissolved version of the v0-4 reef features.
 
 Limitations:
-In this analysis we are comparing the v0-4 dataset (A) with the Rough Reef Mask (B). The Rough 
-Reef Mask is not a perfect representation of the true reef boundaries. It has boundary errors 
+In this analysis we are comparing the v0-4 dataset (A) with the Rough Reef Mask (B). The Rough
+Reef Mask is not a perfect representation of the true reef boundaries. It has boundary errors
 that are greater than the v0-4 dataset. It is however an independent mapping and so it provides
 a useful comparison. This means that the absolute error values are not a direct measure of the
 true boundary error. However, the relative error values and the distribution of errors are still

@@ -4,7 +4,7 @@ Script: 11-expand-attribs.py
 Purpose:
     This script processes a shapefile of reef and sandbank features from northern Australia,
     enriching it with additional classification attributes from a crosswalk table. The goal is
-    to harmonize the dataset with multiple external classification schemes (e.g., Seamap Australia,
+    to harmonise the dataset with multiple external classification schemes (e.g., Seamap Australia,
     Natural Values Common Language, Queensland Wetlands Info) and prepare it for publication.
 
 Processing Steps:
@@ -41,7 +41,7 @@ Outputs:
 Notes:
     - Requires the 'fiona' engine for shapefile writing to support custom field lengths.
     - Prints status messages at each major processing step.
-    - Designed for use in the AIMS NESP 3.17 project for harmonizing reef boundary mapping data.
+    - Designed for use in the AIMS NESP 3.17 project for harmonising reef boundary mapping data.
 """
 
 import configparser
@@ -141,7 +141,7 @@ def main():
         print("Summary of mismatches (by RB_Type_L3, Attachment, DepthCat):")
         print(mismatched_gdf.groupby(['RB_Type_L3', 'Attachment', 'DepthCat']).size())
         print("------------------------------------------------")
-        print("ERROR:Aborting further processing due to mismatches.")
+        print("ERROR: Aborting further processing due to mismatches.")
         return
 
     # Prepare output dataframe

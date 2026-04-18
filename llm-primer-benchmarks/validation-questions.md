@@ -1,8 +1,8 @@
 The following are validation questions used to test the LLM primer documentation. These questions should not be addressed directly by the documentation, and should only be reviewed and assessed once the documentation is considered complete and ready for benchmarking. The training questions provided in the README.md can be considered in the documentation and used to test and optimised the response from LLMs during the development of the documentation.
 
-These questions are filed in a separate file to limit exposure to these questions during the development of the documentation. Because the documentation and benchmarking is developed manually by a single individual the act of writting the answers to the benchmark questions would pollute the development process. Knowledge of the questions that will be asked will bias the documentation to directly answer these questions. This will result in the documentmentation appearing to perform well, whilst not actually performing well on unseen user questions.
+These questions are filed in a separate file to limit exposure to these questions during the development of the documentation. Because the documentation and benchmarking is developed manually by a single individual the act of writing the answers to the benchmark questions would pollute the development process. Knowledge of the questions that will be asked will bias the documentation to directly answer these questions. This will result in the documentation appearing to perform well, whilst not actually performing well on unseen user questions.
 
-To limit exposure to the validation questions once the questions were collected from users, or created, they were split into one third training and two thirds validation questions. The validation questions were moved copy and pasted into this file without reading them. This file was then not touched until the documentation was considered ready for benchmarking. There was at least a week between the creation of the questions and the creation of the documentation. This helped to ensure any knowledge of the questions faded from memory.
+To limit exposure to the validation questions once the questions were collected from users, or created, they were split into one third training and two thirds validation questions. The validation questions were copied and pasted into this file without reading them. This file was then not touched until the documentation was considered ready for benchmarking. There was at least a week between the creation of the questions and the creation of the documentation. This helped to ensure any knowledge of the questions faded from memory.
 
 
 Questions below
@@ -14,7 +14,7 @@ Questions below
 23. Why weren't bathymetry datasets used as part of the initial mapping (version v0-1, to v0-4)?
 25. Can this dataset help me find good fishing locations?
 27. How many reefs did this mapping discover?
-29. What enabled you to map reefs now? Could this mappping have been done in the past?
+29. What enabled you to map reefs now? Could this mapping have been done in the past?
 31. How do I download the dataset?
 33. What is reef mapping?
 35. What do the different reef types mean?

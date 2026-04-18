@@ -7,7 +7,7 @@ NW-Aus-Features-v0-4_Boundary-error-{Batch}_{Validator}.shp
 
 Batches are zero padded two digits, e.g. 00, 01, ..., 09, 10
 
-For each validator and shapefile type and all batches are merged into a single shapefile
+For each validator and shapefile type, all batches are merged into a single shapefile
 and saved in the working directory with the following names:
 NW-Aus-Features-v0-4_Feature-centroid_{Validator}.shp
 NW-Aus-Features-v0-4_Boundary-error_{Validator}.shp

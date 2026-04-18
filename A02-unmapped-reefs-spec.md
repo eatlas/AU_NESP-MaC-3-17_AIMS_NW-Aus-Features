@@ -375,7 +375,7 @@ When `--prepare` is given, only the template shapefiles are created. When omitte
 
 6. **Geometry validation and repair**: All polygon datasets are repaired using `shapely.make_valid()` rather than the simpler `buffer(0)` approach. `make_valid()` handles a wider range of topology errors (self-intersections, ring orientation, degenerate rings) and is the recommended approach in Shapely 2.x. The L2 input is validated twice: once in geographic CRS (EPSG:4283) after initial loading, and once after reprojection to metric CRS (EPSG:3112), because reprojection itself can introduce new topology invalidity. Any remaining invalid features are saved to diagnostic shapefiles with a GEOS-provided invalidity reason (`inv_reason` attribute) to support debugging in QGIS.
 
-6. **Reef counting methodology reference**: The clustering distance (100 m), effective width formula, minimum size threshold (100 m), and size classes follow Lawrey, Bycroft & Hammerton (2026).
+7. **Reef counting methodology reference**: The clustering distance (100 m), effective width formula, minimum size threshold (100 m), and size classes follow Lawrey, Bycroft & Hammerton (2026).
 
 
 ## Dependencies

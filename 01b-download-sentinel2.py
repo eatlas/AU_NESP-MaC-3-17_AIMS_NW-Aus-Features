@@ -1,16 +1,16 @@
 """
-This script download imagery from the 15th percentile (All tide) and low tide image datasets 
-(Hammerton & Lawrey, 2024a; 2024b). 
+This script downloads imagery from the 15th percentile (All tide) and low tide image datasets
+(Hammerton & Lawrey, 2024a; 2024b).
 
 These image datasets are large (203 GB) making downloading the datasets challenging. This
 script progressively downloads each of the images. If the script is interrupted then it will
 pick up from where it left off.
 
 This script allows subsets of the datasets to be downloaded. This can be a custom region of Sentinel 2
-tiles or named regions, such as NorthernAU that corresponds to the study area for the NESP 
+tiles or named regions, such as NorthernAU that corresponds to the study area for the NESP
 MaC 3.17 project, and GBR for the Great Barrier Reef and Torres Strait.
 
-Download all image styles across all regions: Note these can be run in parallel or in serial. 
+Download all image styles across all regions: Note these can be run in parallel or in serial.
 
 To reproduce this dataset:
 python 01b-download-sentinel2.py --dataset 15th_percentile
@@ -20,7 +20,7 @@ python 01b-download-sentinel2.py --dataset low_tide_infrared
 Single Tile Demo Run: (Takes approximately 1 min per tile)
 python 01b-download-sentinel2.py --dataset 15th_percentile --region GBR --tiles 55KDA
 python 01b-download-sentinel2.py --dataset low_tide_true_colour --region GBR --tiles 55KDA
-The file ID can be determine from the following map:
+The file ID can be determined from the following map:
 https://maps.eatlas.org.au/index.html?intro=false&z=7&ll=148.00000,-18.00000&l0=ea_ref%3AWorld_ESA_Sentinel-2-tiling-grid_Poly,ea_ea-be%3AWorld_Bright-Earth-e-Atlas-basemap
 We need to specify the region in this call so that subsequent script know where to find the imagery.
 Note: The region needs to match tiles otherwise an error will be generated.
@@ -28,12 +28,12 @@ Note: The region needs to match tiles otherwise an error will be generated.
 
 References:
 
-Hammerton, M., & Lawrey, E. (2024a). North Australia Sentinel 2 Satellite Composite Imagery - 
-15th percentile true colour (NESP MaC 3.17, AIMS) (2nd Ed.) [Data set]. eAtlas. 
+Hammerton, M., & Lawrey, E. (2024a). North Australia Sentinel 2 Satellite Composite Imagery -
+15th percentile true colour (NESP MaC 3.17, AIMS) (2nd Ed.) [Data set]. eAtlas.
 https://doi.org/10.26274/HD2Z-KM55
 
-Hammerton, M., & Lawrey, E. (2024b). Tropical Australia Sentinel 2 Satellite Composite Imagery - 
-Low Tide - 30th percentile true colour and near infrared false colour (NESP MaC 3.17, AIMS) 
+Hammerton, M., & Lawrey, E. (2024b). Tropical Australia Sentinel 2 Satellite Composite Imagery -
+Low Tide - 30th percentile true colour and near infrared false colour (NESP MaC 3.17, AIMS)
 (1st Ed.) [Data set]. eAtlas. https://doi.org/10.26274/2bfv-e921
 """
 
@@ -78,7 +78,7 @@ def get_tile_sets() -> Dict[str, Dict[str, List[str]]]:
         '54LXP', '57HVE', '57HWE', '57JVF', '57JVG', '57JVH', '57JVJ', '57JWF', '57JWG',
         '57JWH', '58JGN', '58JGP', '59JKH', '59JKJ'
         ]
-                
+
     tile_ids_gbr = [
         '54LWQ', '54LXQ', '54LYK', '54LYL', '54LYM', '54LYN', '54LYP', '54LYQ', '54LZK',
         '54LZL', '54LZM', '54LZN', '54LZP', '54LZQ', '55KCA', '55KCB', '55KCV', '55KDA',
@@ -149,7 +149,7 @@ def main():
     parser.add_argument("--region", help="Specify the tile region to download (NorthernAU, GBR, custom)", default="all")
     parser.add_argument("--custom", help="Path to CSV file with custom TileIDs (used with --region custom)")
     parser.add_argument("--dataset", help="Specify the dataset to download (15th_percentile, low_tide_true_colour, low_tide_infrared)", default="15th_percentile")
-    parser.add_argument("--tiles", type=str, nargs='+', default=[], 
+    parser.add_argument("--tiles", type=str, nargs='+', default=[],
                         help="Space-separated list of TileIDs to download. For example: --tiles 46LGM 46LGN")
     args = parser.parse_args()
 
@@ -209,7 +209,7 @@ def main():
         set_output_dir = os.path.join(args.output, args.dataset)
         if not os.path.exists(set_output_dir):
             os.makedirs(set_output_dir)
-        
+
         for tile in tiles:
             downloaded_count += 1
             url = base_urls[args.dataset].format(TileID=tile)
@@ -230,7 +230,7 @@ def main():
         print("\nThe following TileIDs were not downloaded due to 404 errors:")
         for missing_tile in missing_tiles:
             print(missing_tile)
-            
+
     print("\nAll downloads completed")
 
 if __name__ == "__main__":
