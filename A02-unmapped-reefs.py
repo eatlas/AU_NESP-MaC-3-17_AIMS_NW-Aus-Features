@@ -30,9 +30,9 @@ cfg.read("config.ini")
 in_3p_path = cfg.get("general", "in_3p_path")
 in_3p_path = 'data/v1-0/in-3p'
 version = cfg.get("general", "version")
-#version = 'v0-4'
+
 # ── Paths ──────────────────────────────────────────────────────────────────────
-L2_INPUT = f"working/{version}/12/NW-Features_{version}_RB-Type-L2.shp"
+L2_INPUT = cfg.get("paths", "current_processed_L2")
 AHS_INPUT = f"{in_3p_path}/AU_NESP-D3_AHS_Reefs/sbdare_a.shp"
 REEFKIM_INPUT = f"data/{version}/in-3p-mirror/WA_CU_WAMSI-2-1-3-1_ReefKIM/Reef_KIM.shp"
 UNEP_INPUT = (
@@ -67,6 +67,7 @@ BATHY_CHART_POINT_BUFFER_M = 250    # Buffer radius for manual point tags to all
 
 # Effective width bounds (m) for each size class  [low, high)
 _SIZE_CLASSES = [
+    (0, 100, "Very small"),
     (100, 300, "Small"),
     (300, 1_000, "Medium"),
     (1_000, 3_000, "Large"),
@@ -109,10 +110,11 @@ def _explode_union(union_geom):
 # Phase 1 — Build countable reef clusters (Steps 1.1–1.5)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build_countable_clusters():
-    """Load L2 reef features, cluster by proximity, filter to eff_width >= 100 m.
+def build_reef_clusters():
+    """Load L2 reef features, cluster by proximity, classify by size.
 
-    Returns a GeoDataFrame in EPSG:4283 with one row per countable reef cluster.
+    Returns a GeoDataFrame in EPSG:4283 with one row per reef cluster,
+    including both countable (eff_width >= 100 m) and very small clusters.
     """
     # Step 1.1 — Load and filter
     print(f"  Loading L2 features from: {L2_INPUT}")
@@ -173,9 +175,7 @@ def build_countable_clusters():
             )
 
     clusters = gpd.GeoDataFrame(all_rows, crs=CRS_METRIC)
-
-    # Step 1.3 — Filter to countable reefs (effective width >= MIN_EFF_WIDTH_M)
-    clusters = clusters[clusters["eff_wid_m"] >= MIN_EFF_WIDTH_M].copy().reset_index(drop=True)
+    clusters = clusters.reset_index(drop=True)
 
     # Step 1.5 — Reproject to storage CRS
     clusters = clusters.to_crs(CRS_STORAGE)
@@ -286,11 +286,14 @@ def run_analysis():
     print("=== Analysis mode ===\n")
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    # Step 2.1 — Build countable reef clusters
-    print("Step 1: Building countable reef clusters ...")
-    clusters = build_countable_clusters()
+    # Step 2.1 — Build reef clusters and split countable vs very small
+    print("Step 1: Building reef clusters ...")
+    all_clusters = build_reef_clusters()
+    clusters = all_clusters[all_clusters["eff_wid_m"] >= MIN_EFF_WIDTH_M].copy().reset_index(drop=True)
+    very_small = all_clusters[all_clusters["eff_wid_m"] < MIN_EFF_WIDTH_M].copy().reset_index(drop=True)
     clusters.to_file(CLUSTERS_SHP)
     print(f"  {len(clusters)} countable reef clusters built and saved.")
+    print(f"  {len(very_small)} very small reef clusters (below {MIN_EFF_WIDTH_M} m threshold).")
 
     # Step 2.2 — Load and preprocess reference datasets
     print("\nStep 2: Loading reference datasets ...")
@@ -389,6 +392,13 @@ def run_analysis():
     print(f"  Rocky Reef:  {len(rocky)}")
     print(f"  Total:       {len(clusters)}")
 
+    vs_coral = very_small[very_small["RB_Type_L2"] == "Coral Reef"]
+    vs_rocky = very_small[very_small["RB_Type_L2"] == "Rocky Reef"]
+    print(f"\nVery small reef clusters (effective width < {MIN_EFF_WIDTH_M} m):")
+    print(f"  Coral Reef:  {len(vs_coral)}  ({vs_coral['c_area_km2'].sum():.3f} km\u00b2)")
+    print(f"  Rocky Reef:  {len(vs_rocky)}  ({vs_rocky['c_area_km2'].sum():.3f} km\u00b2)")
+    print(f"  Total:       {len(very_small)}  ({very_small['c_area_km2'].sum():.3f} km\u00b2)")
+
     print(f"\nTier 1 automated matches:")
     print(f"  AHS:     {len(matched_ahs)} clusters")
     print(f"  ReefKIM: {len(matched_kim)} clusters")
@@ -411,28 +421,36 @@ def run_analysis():
             n = (subset["known_stat"] == stat).sum()
             print(f"  {stat + ':':<22} {n}")
 
+    _sc_rows = [("Small (100\u2013300 m)", "Small"),
+                ("Medium (300\u20131,000 m)", "Medium"),
+                ("Large (1,000\u20133,000 m)", "Large"),
+                ("Very large (> 3,000 m)", "Very large")]
+
     print(f"\nSize class breakdown of all countable reefs:")
     for reef_type in ["Coral Reef", "Rocky Reef"]:
         print(f"  {reef_type}:")
         s = clusters[clusters["RB_Type_L2"] == reef_type]
-        print(f"    Small (100\u2013300 m):       {(s['size_class'] == 'Small').sum()}")
-        print(f"    Medium (300\u20131,000 m):    {(s['size_class'] == 'Medium').sum()}")
-        print(f"    Large (1,000\u20133,000 m):   {(s['size_class'] == 'Large').sum()}")
-        print(f"    Very large (> 3,000 m):  {(s['size_class'] == 'Very large').sum()}")
+        for sc_label, sc_key in _sc_rows:
+            sc_sub = s[s["size_class"] == sc_key]
+            print(f"    {sc_label + ':':<27} {len(sc_sub):>4}  ({sc_sub['c_area_km2'].sum():.3f} km\u00b2)")
+        print(f"    {'Total:':<27} {len(s):>4}  ({s['c_area_km2'].sum():.3f} km\u00b2)")
 
     print(f"\nSize class breakdown of newly mapped reefs:")
     for reef_type in ["Coral Reef", "Rocky Reef"]:
         print(f"  {reef_type}:")
         s_all = clusters[clusters["RB_Type_L2"] == reef_type]
         s_new = newly_mapped[newly_mapped["RB_Type_L2"] == reef_type]
-        for sc_label, sc_key in [("Small (100\u2013300 m)", "Small"),
-                                  ("Medium (300\u20131,000 m)", "Medium"),
-                                  ("Large (1,000\u20133,000 m)", "Large"),
-                                  ("Very large (> 3,000 m)", "Very large")]:
+        for sc_label, sc_key in _sc_rows:
             n_all = (s_all["size_class"] == sc_key).sum()
             n_new = (s_new["size_class"] == sc_key).sum()
-            pct = f"({100 * n_new / n_all:.1f}%)" if n_all > 0 else "(-)" 
-            print(f"    {sc_label + ':':<27} {n_new:>4}  {pct}")
+            area_new = s_new[s_new["size_class"] == sc_key]["c_area_km2"].sum()
+            pct = f"({100 * n_new / n_all:.1f}%)" if n_all > 0 else "(-)"
+            print(f"    {sc_label + ':':<27} {n_new:>4}  {pct:<8}  ({area_new:.3f} km\u00b2)")
+        n_new_total = len(s_new)
+        n_all_total = len(s_all)
+        area_new_total = s_new["c_area_km2"].sum()
+        pct_total = f"({100 * n_new_total / n_all_total:.1f}%)" if n_all_total > 0 else "(-)"
+        print(f"    {'Total:':<27} {n_new_total:>4}  {pct_total:<8}  ({area_new_total:.3f} km\u00b2)")
 
     print(f"\nOutput: {ANALYSIS_SHP}")
 

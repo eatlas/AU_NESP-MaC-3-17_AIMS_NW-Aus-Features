@@ -119,17 +119,21 @@ The clustering follows the methodology of Lawrey, Bycroft & Hammerton (2026).
    - `eff_width_m`: effective reef width = $2\sqrt{A/\pi}$ where $A$ = `cluster_area_m2`.
 6. Dissolve the original unbuffered polygons within each cluster into a single multipolygon per cluster (unary union of originals, not the buffered envelopes).
 
-##### Step 2.1c — Filter to countable reefs
+##### Step 2.1c — Split countable and very small clusters
 
-1. Retain only clusters with `eff_width_m` ≥ 100 m (corresponding to area ≥ ~7,854 m²).
-2. Assign a size class to each cluster:
+1. Assign a size class to each cluster:
 
 | Size class | Effective width |
 |---|---|
+| Very small | < 100 m |
 | Small | 100–300 m |
 | Medium | 300–1,000 m |
 | Large | 1,000–3,000 m |
 | Very large | > 3,000 m |
+
+2. Split clusters into **countable** (`eff_width_m` ≥ 100 m) and **very small** (`eff_width_m` < 100 m).
+3. Only countable clusters proceed to Steps 2.2–2.6 (spatial matching and classification).
+4. Very small clusters are retained for reporting only (count and total area per reef type). These are reef features that remain below the countable threshold even after proximity clustering.
 
 ##### Step 2.1d — Build cluster attributes
 
@@ -142,7 +146,7 @@ Each countable reef cluster carries the following attributes:
 | `n_parts` | int | Number of original L2 polygons in the cluster. |
 | `c_area_km2` | float | Sum of original polygon areas (km², EPSG:3112). |
 | `eff_wid_m` | float | Effective reef width (m). Rounded to 1 decimal. |
-| `size_class` | str | Size class label (Small / Medium / Large / Very large). |
+| `size_class` | str | Size class label (Very small / Small / Medium / Large / Very large). |
 
 ##### Step 2.1e — Save countable reef clusters
 
@@ -252,6 +256,11 @@ Countable reef clusters (effective width >= 100 m, separated by > 100 m):
   Rocky Reef:  {n}
   Total:       {n}
 
+Very small reef clusters (effective width < 100 m):
+  Coral Reef:  {n}  ({a} km²)
+  Rocky Reef:  {n}  ({a} km²)
+  Total:       {n}  ({a} km²)
+
 Tier 1 automated matches:
   AHS:     {n} clusters
   ReefKIM: {n} clusters
@@ -281,27 +290,31 @@ Classification summary — All reefs:
 
 Size class breakdown of all countable reefs:
   Coral Reef:
-    Small (100–300 m):       {n}
-    Medium (300–1,000 m):    {n}
-    Large (1,000–3,000 m):   {n}
-    Very large (> 3,000 m):  {n}
+    Small (100–300 m):       {n}  ({a} km²)
+    Medium (300–1,000 m):    {n}  ({a} km²)
+    Large (1,000–3,000 m):   {n}  ({a} km²)
+    Very large (> 3,000 m):  {n}  ({a} km²)
+    Total:                   {n}  ({a} km²)
   Rocky Reef:
-    Small (100–300 m):       {n}
-    Medium (300–1,000 m):    {n}
-    Large (1,000–3,000 m):   {n}
-    Very large (> 3,000 m):  {n}
+    Small (100–300 m):       {n}  ({a} km²)
+    Medium (300–1,000 m):    {n}  ({a} km²)
+    Large (1,000–3,000 m):   {n}  ({a} km²)
+    Very large (> 3,000 m):  {n}  ({a} km²)
+    Total:                   {n}  ({a} km²)
 
 Size class breakdown of newly mapped reefs:
   Coral Reef:
-    Small (100–300 m):       {n}  ({p}%)
-    Medium (300–1,000 m):    {n}  ({p}%)
-    Large (1,000–3,000 m):   {n}  ({p}%)
-    Very large (> 3,000 m):  {n}  ({p}%)
+    Small (100–300 m):       {n}  ({p}%)  ({a} km²)
+    Medium (300–1,000 m):    {n}  ({p}%)  ({a} km²)
+    Large (1,000–3,000 m):   {n}  ({p}%)  ({a} km²)
+    Very large (> 3,000 m):  {n}  ({p}%)  ({a} km²)
+    Total:                   {n}  ({p}%)  ({a} km²)
   Rocky Reef:
-    Small (100–300 m):       {n}  ({p}%)
-    Medium (300–1,000 m):    {n}  ({p}%)
-    Large (1,000–3,000 m):   {n}  ({p}%)
-    Very large (> 3,000 m):  {n}  ({p}%)
+    Small (100–300 m):       {n}  ({p}%)  ({a} km²)
+    Medium (300–1,000 m):    {n}  ({p}%)  ({a} km²)
+    Large (1,000–3,000 m):   {n}  ({p}%)  ({a} km²)
+    Very large (> 3,000 m):  {n}  ({p}%)  ({a} km²)
+    Total:                   {n}  ({p}%)  ({a} km²)
 
 Output: working/{version}/A02/unmapped-reefs-analysis.shp
 
