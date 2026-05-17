@@ -1,5 +1,5 @@
 """
-Script: 11-expand-attribs.py
+Script: 12-expand-attribs.py
 
 Purpose:
     This script processes a shapefile of reef and sandbank features from northern Australia,
@@ -35,8 +35,8 @@ Inputs:
     - Crosswalk table: data/{version}/in/RB_Type_L3_crosswalk.csv
 
 Outputs:
-    - Enriched features shapefile: working/{version}/11/NW-Features_{version}.shp
-    - Unmatched features shapefile (if any): working/{version}/11/Feature-mismatched.shp
+    - Enriched features shapefile: working/{version}/12/NW-Features_{version}.shp
+    - Unmatched features shapefile (if any): working/{version}/12/Feature-mismatched.shp
 
 Notes:
     - Requires the 'fiona' engine for shapefile writing to support custom field lengths.
@@ -56,10 +56,10 @@ in_3p_path = cfg.get("general", "in_3p_path")
 version = cfg.get("general", "version")
 
 # Input/output paths
-INPUT_SHP = f"working/{version}/10/NW-Aus-Features_{version}.shp"
+INPUT_SHP = f"working/{version}/11/NW-Aus-Features_{version}.shp"
 #INPUT_SHP = f"data/{version}/in/Reef-Boundaries_{version}_edit.shp"
 CROSSWALK_CSV = f"data/{version}/in/RB_Type_L3_crosswalk.csv"
-MISMATCHED_SHP = f"working/{version}/11/Feature-mismatched.shp"
+MISMATCHED_SHP = f"working/{version}/12/Feature-mismatched.shp"
 OUTPUT_SHP = cfg.get("paths", "current_processed")
 
 # Version number of the classification scheme
@@ -76,7 +76,8 @@ CROSSWALK_FIELDS = [
 # Existing fields to retain
 RETAIN_FIELDS = [
     'FeatConf', 'TypeConf', 'DepthCat', 'DepthCatSr', 'RB_Type_L3',
-    'Attachment', 'EdgeSrc', 'EdgeAcc_m'
+    'Attachment', 'EdgeSrc', 'EdgeAcc_m',
+    'ReefID', 'PrevReefID', 'ReefIDNote'
 ]
 
 def main():

@@ -1,5 +1,5 @@
 """
-Script: 12-make-RB_Type_L2.py
+Script: 13-make-RB_Type_L2.py
 
 Purpose
 - Produce a North/West Australia-only version of the dataset dissolved at RB_Type_L2 so that
@@ -17,7 +17,7 @@ Classification context
   of each reef/rocky reef at L2, rather than separate L3 parts.
 
 Processing overview
-1) Input: AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L3_{version}.shp (NW-only dataset produced by step 11).
+1) Input: AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L3_{version}.shp (NW-only dataset produced by step 12).
 2) Validation:
    - Assert RB_Type_L2 is present and non-empty for all features.
    - Fail if Attachment, DepthCat, FeatConf, or TypeConf contain unexpected enum values.
@@ -44,7 +44,7 @@ Processing overview
    - Main dissolved singlepart features: AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L2_{version}.shp
      Fields include RB_Type_L2, RB_L3_Agg, Attachment, DepthCat, DepthCatSr, FeatConf, TypeConf,
      EdgeSrc, EdgeAcc_m, Area_km2, geometry.
-   - QA features with mixed Attachment values: working/{version}/12/multi-attachment-values.shp
+   - QA features with mixed Attachment values: working/{version}/13/multi-attachment-values.shp
      Contains the same attributes plus AttSet to aid debugging.
 
 Failure modes
@@ -58,6 +58,8 @@ import geopandas as gpd
 import pandas as pd
 import numpy as np
 from shapely.ops import unary_union
+
+from reef_utils import dissolve_to_l2_components, strip_reef_suffix
 cfg = configparser.ConfigParser()
 cfg.read("config.ini")
 in_3p_path = cfg.get("general", "in_3p_path")
@@ -65,7 +67,7 @@ version = cfg.get("general", "version")
     
 INPUT_SHP = cfg.get("paths", "current_processed")
 OUTPUT_SHP = cfg.get("paths", "current_processed_L2")
-MULTI_ATTACHMENT_SHP = f"working/{version}/12/multi-attachment-values.shp"
+MULTI_ATTACHMENT_SHP = f"working/{version}/13/multi-attachment-values.shp"
 
 # Attachment priority rule (Land > Fringing > Oceanic > otherwise Isolated)
 ATT_PRIORITY = ["Land", "Fringing", "Oceanic"]
@@ -77,11 +79,6 @@ DEPTH_RANK = {v: i for i, v in enumerate(DEPTH_ORDER)}  # lower index = higher
 
 # Confidence order (worst to best ranking via numeric score)
 CONF_SCORE = {"Very Low": 0, "Low": 1, "Medium": 2, "High": 3}
-
-# Small buffer (degrees) used to close floating-point slivers/gaps after dissolve.
-# Applied as buffer(+eps).buffer(-eps): the outward pass seals sub-pixel holes along
-# internal seams; the inward pass restores the outer boundary to its original extent.
-SLIVER_EPS = 1e-6
 
 def unique_nonempty(values):
     vals = [str(v).strip() for v in values if pd.notna(v) and str(v).strip() != ""]
@@ -162,46 +159,63 @@ def assert_enums(gdf: gpd.GeoDataFrame):
         raise AssertionError(" | ".join(errs))
 
 def dissolve_by_l2(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    # Dissolve by RB_Type_L2, then aggregate attributes per singlepart component
+    """Dissolve by RB_Type_L2, then aggregate attributes per singlepart component.
+
+    Uses shared dissolve_to_l2_components() utility to ensure consistent
+    clustering with 11-allocate-ReefIDs.py.
+    """
+    # Use shared utility for consistent L2 clustering
+    components = dissolve_to_l2_components(gdf)
+
     out_parts = []
-    for l2, grp in gdf.groupby("RB_Type_L2"):
-        union_geom = unary_union(grp.geometry)
-        # Close floating-point slivers and boundary cracks produced by the dissolve.
-        union_geom = union_geom.buffer(SLIVER_EPS).buffer(-SLIVER_EPS)
-        parts_gdf = gpd.GeoDataFrame(geometry=[union_geom], crs=gdf.crs).explode(index_parts=False).reset_index(drop=True)
-        parts_gdf["part_id"] = range(len(parts_gdf))
+    for comp in components:
+        l2 = comp['l2_class']
+        part_geom = comp['geometry']
+        member_indices = comp['member_indices']
 
-        # Spatially join original features to each dissolved part to aggregate only merged members
-        join = gpd.sjoin(grp, parts_gdf[["geometry", "part_id"]], predicate="intersects", how="inner")
+        # Get original features that belong to this component
+        jgrp = gdf.loc[member_indices]
 
-        for pid, jgrp in join.groupby("index_right"):
-            part_geom = parts_gdf.loc[pid, "geometry"]
-            # Aggregate attributes from original members of this component
-            rb_l3_agg = join_semicolon(jgrp["RB_Type_L3"])
-            att_choice, att_set = choose_attachment(jgrp["Attachment"])
-            depthcat = choose_depthcat(jgrp["DepthCat"])
-            depthcat_sr = join_semicolon(jgrp["DepthCatSr"])
-            feats_conf = choose_worst_conf(jgrp["FeatConf"])
-            type_conf = choose_worst_conf(jgrp["TypeConf"])
-            edge_src = join_semicolon(jgrp["EdgeSrc"])
-            edge_acc = max_edge_acc(jgrp["EdgeAcc_m"])
+        # Aggregate attributes from original members of this component
+        rb_l3_agg = join_semicolon(jgrp["RB_Type_L3"])
+        att_choice, att_set = choose_attachment(jgrp["Attachment"])
+        depthcat = choose_depthcat(jgrp["DepthCat"])
+        depthcat_sr = join_semicolon(jgrp["DepthCatSr"])
+        feats_conf = choose_worst_conf(jgrp["FeatConf"])
+        type_conf = choose_worst_conf(jgrp["TypeConf"])
+        edge_src = join_semicolon(jgrp["EdgeSrc"])
+        edge_acc = max_edge_acc(jgrp["EdgeAcc_m"])
 
-            att_set_ordered = [a for a in ATT_ALL if a in set(unique_nonempty(jgrp["Attachment"]))]
-            att_set_join = ";".join(att_set_ordered)
+        # Derive base ReefID by stripping trailing letters from any constituent
+        reef_ids = jgrp["ReefID"].dropna() if "ReefID" in jgrp.columns else pd.Series(dtype=str)
+        reef_ids = reef_ids[reef_ids != '']
+        if not reef_ids.empty:
+            base_ids = reef_ids.apply(strip_reef_suffix)
+            unique_bases = base_ids.unique()
+            assert len(unique_bases) == 1, (
+                f"L2 group has inconsistent base ReefIDs: {list(unique_bases)}"
+            )
+            reef_id = unique_bases[0]
+        else:
+            reef_id = ""
 
-            out_parts.append({
-                "RB_Type_L2": l2,
-                "RB_L3_Agg": rb_l3_agg,
-                "Attachment": att_choice,
-                "AttSet": att_set_join,  # QA
-                "DepthCat": depthcat,
-                "DepthCatSr": depthcat_sr,
-                "FeatConf": feats_conf,
-                "TypeConf": type_conf,
-                "EdgeSrc": edge_src,
-                "EdgeAcc_m": int(edge_acc),
-                "geometry": part_geom
-            })
+        att_set_ordered = [a for a in ATT_ALL if a in set(unique_nonempty(jgrp["Attachment"]))]
+        att_set_join = ";".join(att_set_ordered)
+
+        out_parts.append({
+            "RB_Type_L2": l2,
+            "RB_L3_Agg": rb_l3_agg,
+            "ReefID": reef_id,
+            "Attachment": att_choice,
+            "AttSet": att_set_join,  # QA
+            "DepthCat": depthcat,
+            "DepthCatSr": depthcat_sr,
+            "FeatConf": feats_conf,
+            "TypeConf": type_conf,
+            "EdgeSrc": edge_src,
+            "EdgeAcc_m": int(edge_acc),
+            "geometry": part_geom
+        })
 
     return gpd.GeoDataFrame(out_parts, crs=gdf.crs)
 
@@ -239,7 +253,7 @@ def main():
     os.makedirs(os.path.dirname(OUTPUT_SHP), exist_ok=True)
 
     # Save main output (exclude QA fields)
-    cols = ["RB_Type_L2", "RB_L3_Agg", "Attachment", "DepthCat", "DepthCatSr",
+    cols = ["RB_Type_L2", "RB_L3_Agg", "ReefID", "Attachment", "DepthCat", "DepthCatSr",
             "FeatConf", "TypeConf", "EdgeSrc", "EdgeAcc_m", "Area_km2", "geometry"]
     print(f"Saving dissolved output to {OUTPUT_SHP}...")
     singleparts[cols].to_file(OUTPUT_SHP)
@@ -248,7 +262,7 @@ def main():
     multi = singleparts[singleparts["HasMultiAtt"]].copy()
     if not multi.empty:
         os.makedirs(os.path.dirname(MULTI_ATTACHMENT_SHP), exist_ok=True)
-        qa_cols = ["RB_Type_L2", "RB_L3_Agg", "Attachment", "AttSet", "DepthCat", "DepthCatSr",
+        qa_cols = ["RB_Type_L2", "RB_L3_Agg", "ReefID", "Attachment", "AttSet", "DepthCat", "DepthCatSr",
                    "FeatConf", "TypeConf", "EdgeSrc", "EdgeAcc_m", "Area_km2", "geometry"]
         print(f"Saving multi-attachment QA output to {MULTI_ATTACHMENT_SHP}...")
         multi[qa_cols].to_file(MULTI_ATTACHMENT_SHP)
