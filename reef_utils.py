@@ -76,6 +76,8 @@ def dissolve_to_l2_components(gdf):
         union_geom = unary_union(class_gdf.geometry)
         # Close floating-point slivers/gaps produced by the dissolve
         union_geom = union_geom.buffer(SLIVER_EPS).buffer(-SLIVER_EPS)
+        # Remove redundant micro-vertices introduced by the buffer arcs
+        union_geom = union_geom.simplify(SLIVER_EPS, preserve_topology=True)
         # Explode into singlepart components (each = one reef)
         parts_gdf = gpd.GeoDataFrame(
             geometry=[union_geom], crs=gdf.crs

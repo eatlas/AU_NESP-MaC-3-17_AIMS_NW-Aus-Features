@@ -110,7 +110,7 @@ Progressively improving the mapping in the Gulf of Carpentaria adding a signific
 - Time: 32 min 11011 features 1664 features with depths.
 
 2026-04-09:
-Depth classifications and some additional small reefs near Houtman Abrolhos. We found a few more small reefs around Houtman Abrolhos based on the 
+Depth classifications and some additional small reefs near Houtman Abrolhos. 
 - Time: 1 hr 30 min 10933 features 1941 features without depths
 - Time: 1 hr 40 min 10902 features 1996 features without depths.
 - Time: 1 hr 10892 features 2162 features without depths
