@@ -259,6 +259,34 @@ def main():
     polygons_gdf = clipped_gdf[is_poly_mask]
     nonpoly_clipped = clipped_gdf[~is_poly_mask]
 
+    # --- Explode multiparts to singleparts and report land-splits ---
+    pre_explode_count = len(polygons_gdf)
+    # Track original index before explode for QA reporting
+    polygons_gdf = polygons_gdf.copy()
+    polygons_gdf['_orig_idx'] = polygons_gdf.index
+    polygons_gdf = polygons_gdf.explode(index_parts=False).reset_index(drop=True)
+    post_explode_count = len(polygons_gdf)
+
+    if post_explode_count > pre_explode_count:
+        # Identify features that were split into multiple parts
+        split_counts = polygons_gdf.groupby('_orig_idx').size()
+        split_features = split_counts[split_counts > 1]
+        split_parts = polygons_gdf[polygons_gdf['_orig_idx'].isin(split_features.index)].copy()
+        split_parts['n_parts'] = split_parts['_orig_idx'].map(split_features)
+        split_parts['part_area_km2'] = split_parts.to_crs(epsg=3112).geometry.area / 1e6
+
+        # Save QA shapefile
+        land_splits_shp = f"{OUTPUT_DIR}/NW-Aus-Features_{version}_land-splits.shp"
+        qa_cols = [c for c in split_parts.columns if c not in ['_orig_idx']]
+        split_parts[qa_cols].to_file(land_splits_shp)
+        print(f"  {len(split_features)} features were split into multiple parts by land clipping.")
+        print(f"  Review {land_splits_shp}")
+    else:
+        print("  No features were split into multiple parts by land clipping.")
+
+    # Drop the tracking column before saving
+    polygons_gdf = polygons_gdf.drop(columns=['_orig_idx'])
+
     print(f"Saving {len(polygons_gdf)} polygon features to: {OUTPUT_FILE}")
     polygons_gdf.to_file(OUTPUT_FILE)
 
