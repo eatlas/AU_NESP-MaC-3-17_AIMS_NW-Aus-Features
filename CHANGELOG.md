@@ -1,17 +1,81 @@
 # Map stage notes
 The following is a set of notes detailing the processing that was applied in the development of each phase of the mapping. This phased approach provides a record of what features were detected and mapped at each stage of the project, where each stage represents the incorporation of new information. These are unstructured, unpolished notes. The time estimates are a record of time spent on the digitisation of the dataset, along with the number of features contained in the dataset.
 
-
-# Stage 5 - v1-0
+# Stage 6 - v1-1
 2026-05-17:
-We prepared the dataset for publication. The file arrangement in v0-4 did not publish the RB_Type_L2 version of the dataset. This means that when someone downloads the available data the QGIS maps will not work until the `12-make-RB_Type_L2.py` script is run. It seems likely that some people will want the simplified classification version, without having to run the script and so I decided to include it in the published `out` folder. To allow each shapefile to be independently downloaded we need to ensure that each shapefile is in its own directory. We therefore move the primary dataset from `out/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_v1-0.shp` to `out/full-classes/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L3_v1-0.shp`. We then made the RB_Type_L2 classification version available from `out/simp-classes/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L2_v1-0.shp`. The paths in the scripts `11-expand-attribs.py` and `12-make-RB_Type_L2.py` were adjusted so that they save the outputs directly to the `out` directory, rather than to the `working` directory. This removes the need for the manual copy and rename that was needed in v0-4. The paths in QGIS were adjusted to the new locations.
+With the clean up of the splitting of features by the land clipping resolved the next challenges is the allocation of permanent identifiers to the features. For this we used `11-allocated-ReefIDs.py`. On reviewing the initial allocation we noticed several problems. 
+1. On North Keeling island we had a mixture of features with attachment attributes 'Coral Reef' and 'Oceanic' classifications. This meant that at the L2 these features were not clustered and thus were allocated separate based IDs. This was resolved by fixing the 'Attachment' attribute values. After correcting these attributes, we still allocated separate IDs for the three parts of North Keeling island because the area separating the central and rim reefs is 'blank' atoll platform. This is considered to be soft sediment, not coral and thus should not result in features being dissolved together at L2. Essentially we were triggered to look at the classifications due to the ReefIDs, we fixed the classifications, but the resulting IDs are still the same.
+2. The base ID is allocated so that all the parts of a reef have a common parent ID. Features are dissolved at the L2 level then allocated IDs. If a feature has subparts, such as a 'Coral Reef' and a 'Coral Reef Flat' then these are allocated subpart letter extensions. The problem was the large reef system around Barrow Island in WA. This complex has many parts, well more than 26, and so IDs were allocated with higher Unicode characters rather than multiple letters. This results in strange IDs such as: R-8238-367©, R-8238-367. There is approximately 145 parts in this one reef system. We therefore need to use two letter codes when the number of features exceeds 26. 
+
+To test the robustness of the ReefID allocation scheme to future changes we made a new test version of the dataset. The goal is to track how IDs are modified or allocated under different scenarios. For this we tested the following scenarios:
+1. We had a three part coral reef complex, each with subpart IDs. We split the main central reef into two parts. Expected behaviour: The larger of the two parts should retain its original ID. The smaller part should be allocated a new subpart identifier and its original ID retained in the the PrevReefID attribute.
+2. We added a new isolated reef. This should be allocated the next available identifier in its grid cell.
+3. Most reefs are unmodified. All these reefs should have their IDs retained.
+4. We added a new touching reef features to an existing reef with a single part. The single part reef should retain its ID and the new subpart should be allocated a subpart ID with the same base ID as the single part.
+5. We modify the boundary of an existing reef by less than 50%. This reef should retain the same ID as before.
+All these tests passed except scenario 4. In this case both the new neighbouring feature and the original feature were allocated subpart feature names. The original reefID, R-8643-240, became R-8643-240a and the new add on became R-8643-240b. This fails because the original R-8643-240 was unmodified. Its ReefID should not have changed. In this case the change of the ReefID of the original feature was saved to the `PrevReefID` attribute, which is expected behaviour. However, the new touching reef was also assigned a `PrevReefID` of R-8643-240, even though it was a new reef.
+
+An additional failure was noted for scenario 1. For the reef that was split in two parts the smaller part was allocated a new subpart ID as expected. However, no `PrevReefID` was recorded. The idea of saving the PrevReefID is to allow us to understand where a region was previously known by a different name (ReefID). 
+
+- Time: 1 hour - Checking and correcting ID issues.
 
 2026-05-16:
+Continuing to fix up reef boundary issues that are leading to feature splits after land clipping. I think that the majory of the problems are in the Kimberley where the outer reef boundaries were digitised, then high intertidal reefs were digitised as a cut out. On the land side of these cutouts they approximately matched the coastline, but were not always on the inside of the coastline. After the land clipping any bay would be considered as a small coral reef. The cause of these problems is that the land area was not clipped out as holes from the reef boundary. On the landward side the fringing high intertidal should transition to nothing, not a reef features from the other side of the island.
+
+A lot of this work involved fixing geometry problems that would result in an excess number of features in the output. This resulted in numerous additional features as small as 1.5 m across. These are slivers that are a result of misalignment of the digitisation process due to short cuts in the digitisation to speed up the process. The really small features were due to the Coastline 50k dataset having very small holes near the edge of the coastline. This would get filled in by the overlapping neighbouring reef features, resulting in a tiny false reef. 
+
+We had trouble full correcting all features so there would be not remaining splits during clipping. The main issue was the reefs around Barrow Island. This region is so complex that trying to separate all the features would take far too long. We checked to ensure that there were not unintended splits.
+
+We spent an hour checking and correcting the Attachment attribute. We found that there was more than hundred corrections needed (we did not count the actual number). There were a few edge cases that might be considered wrong left in the dataset. The general categorisation was:
+1. Does the reef have an island in it as indicated by Coastline 50k 2024. If yes then 'fringing'.
+2. Is the reef touching or closely associated with a fringing reef? i.e. is the structure likely to be of the same origin? Then also mark as 'fringing'. 
+3. For rocky reefs is the overlapp rocky reef region (the collection of similar reef structures) linked to the mainland or island. If so then 'fringing'. This means that a loosely clustered set of rocky reef patches can be considered as fringing even if it is a fair way offshore (like 1 km), provided that it is part of the one rocky reef region.
+4. Else 'isolated'
+
+- Time: 1 hr 5 min 11512 features, 11723 features after clip. 111 split features with 322 parts. 
+- Time: 35 min 11514 features, 11686 features after clip. 97 split features with 269 parts.
+- Time: 41 min 11528 features, 11669 features after clip. 78 split features with 219 parts.
+- Time: 35 min 11545 features, 11653 features after clip. 61 split features with 169 parts.
+- Time: 45 min 11562 features, 11635 features after clip. 39 split features with 112 parts.
+- Time: 56 min 11579 features, 11621 features after clip. 21 split features with 63 parts.
+- Time: 1 hr 11595 features, 11614 features after clip. 7 split features with 26 parts.
+
+- Time: 56 min 11594 features, 11611 features after clip. 5 split features.
+
+2026-05-15:
+
+Mainly been fixing the rocky reefs around the southern parts of the Gulf of Carpentaria so that the coastline masking does result in additional features. In most parts these splits result in erroneous additional small features. For the area immediately around the flagged feature I also check for boundary error adjustments that are needed.
+
+I am finding that sorting out the land clip splitting is taking a why because each location requires significant additional boundary refinement. The clip splitting tends to occur for locations where the boundary has not been digitised that well. As a result there are often additional boundary issues to be resolved.
+
+- Time: 35 min 11384 features, 11806 features after clip. 187 split features with 609 parts.
+- Time: 1 hr 9 min 11403 features, 11815 after clip. 180 split features with 592 parts.
+- Time: 33 min 11403 features, 11806 after clip. 173 features split with 576 parts. 
+- Time: 1 hr 6 min 11412 features, 11803 after clip. 166 features split with 557 parts.
+- Time: 2 hr 0 min 11465 features, 11817 after clip. 148 features split with 500 parts.
+- Time: 37 min 11469 features, 11801 after clip. 136 features split with 468 parts.
+2026-05-14:
+The goal of this version was to assign permanent identifiers to each of the reef features. This will feed into having identifiers for all reefs in the Australian Tropical Reef Features dataset allowing analysis to reliably reference a specific reef. This will then feed into the map training guide for its testing and tutorials.
+
+We assign each of the reefs a ReefID using a method adapted from the Coral Sea ReefID scheme. The only difference being that it a reef at the L2 level is split at the L3 level that the subparts are allocated a subpart letter (a, b, etc).
+
+We also added the `U01-setup-symbolic-links.bat` script to make it easier to setup all the symbolic links from in-3p to a share data directory. This is useful when creating a new version of the dataset as it saves on having repeat copied of all the third party datasets.
+
+We also added an analysis to `10-clip-land.py` that determines if features get split into multiple parts by the land clipping. Where this occurs indicates a likely case where we will get small slivers from a poorly mapped fringing reef. We will use this check to clean up these features. This will help to ensure that we don't allocate reef IDs to small features that are only a result of poor mapping. This identified 196 features that were split into 636 parts due to the land mask.
+
+We started cleaning up land divided features in the Gulf of Carpentaria. 
+- Time: 40 min. 11380 Edit features, 11808 after Land clip. 191 split features with 619 parts.
+
+# Stage 5 - v1-0
+2026-04-17:
+We prepared the dataset for publication. The file arrangement in v0-4 did not publish the RB_Type_L2 version of the dataset. This means that when someone downloads the available data the QGIS maps will not work until the `12-make-RB_Type_L2.py` script is run. It seems likely that some people will want the simplified classification version, without having to run the script and so I decided to include it in the published `out` folder. To allow each shapefile to be independently downloaded we need to ensure that each shapefile is in its own directory. We therefore move the primary dataset from `out/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_v1-0.shp` to `out/full-classes/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L3_v1-0.shp`. We then made the RB_Type_L2 classification version available from `out/simp-classes/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L2_v1-0.shp`. The paths in the scripts `11-expand-attribs.py` and `12-make-RB_Type_L2.py` were adjusted so that they save the outputs directly to the `out` directory, rather than to the `working` directory. This removes the need for the manual copy and rename that was needed in v0-4. The paths in QGIS were adjusted to the new locations.
+
+2026-04-16:
 - Time: 1 hr 15 min 11351 features 255 features without depths
 - Time: 1 hr 52 min 11361 features 110 features without depths
 - Time: 34 min 11360 features 35 features without depths
 - Time: 1 hr 7 min 11373 features 0 features without depths
-2026-05-15:
+2026-04-15:
 - Time: ~40 min 11289 features 506 features without depths
 - Time: 1 hr 8 min 11295 features 321 features without depths
 2026-04-14:

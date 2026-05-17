@@ -93,10 +93,11 @@ When all modifications to `Reef-Boundaries_{version}_edit.shp` are complete run:
 
 ```bash
 python 10-clip-land.py
-python 11-expand-attribs.py
-python 12-make-RB_Type_L2.py
+python 11-allocate-ReefIDs.py
+python 12-expand-attribs.py
+python 13-make-RB_Type_L2.py
 ```
-This will trim the `Reef-Boundaries_{version}_edit` polygons against the coastline (`data/{version}/in-3p/AU_AIMS_Coastline_50k_2024.Split.AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_split.shp`), use the `data/{version}/in/RB_Type_L3_crosswalk.csv` to expand the classification attributes to include the Natural Values Common Language and the Seamap Australia classifications, and generate a version with simplified classification. This saves the output shapefile to the `data/{version}/out/` folder.
+This will trim the `Reef-Boundaries_{version}_edit` polygons against the coastline (`data/{version}/in-3p/AU_AIMS_Coastline_50k_2024.Split.AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_split.shp`), allocate permanent ReefIDs to each reef, use the `data/{version}/in/RB_Type_L3_crosswalk.csv` to expand the classification attributes to include the Natural Values Common Language and the Seamap Australia classifications, and generate a version with simplified classification. This saves the output shapefile to the `data/{version}/out/` folder.
 
 ## 7. Analysis
 You can then run the analysis scripts:
@@ -114,31 +115,62 @@ We started with copying over the `data/v0-4/` to `data/v1-0`. We updated the pat
 
 If you were to start fresh from this version then you would download the repo, run 01a, 01b, 01c, then remake the outputs by running scripts 10, 11, and 12. Scripts 02, 03, 04, 05, 06, 07, 08, and 09 are only relevant to earlier versions of the dataset and are provided as documentation of the history of the processing.
 
+### v1-1 processing notes
+In preparation for the allocation of permanent identifiers we added the detection in `10-clip-land.py` to identify any of the editing polygons are split into multiple parts during the clipping. This was ensure that small false reefs near the coastline were not allocated identifiers. Each of the splits were manually reviewed and resolved, except for a very small number of cases. The ID allocation is performed by `11-allocate-ReefIDs.py`. The ID allocation scheme must maintain permanent IDs and so the scripts copy over IDs from previous versions. Since this is the first version to have identifiers we run:
+```bash
+python 11-allocate-ReefIDs.py --fresh
+```
+In future versions of the dataset we must ensure that config.ini is setup in the correct current and previous version paths to allow the ID copy to work.
 
 ## Moving the 3rd party data download out of One Drive using a Symbolic link (Windows)
 
-The development of this dataset and the production of the preview maps relies on a bunch of third party datasets. These are large files and so you may wish for them to be downloaded to a separate location to the default used in this repository. For example you may want to work on this dataset in Teams or on One Drive, but not have the third party data saved in these locations. 
+The development of this dataset and the production of the preview maps relies on a bunch of third party datasets. These are large files (over 200 GB total) and should not be stored in OneDrive or Teams. Additionally, these datasets are reused across multiple versions of the dataset, so keeping a single shared copy avoids unnecessary duplication.
 
-To prevent the QGIS links and code files from breaking we used a fixed location for the third party data, `data\{version}\in-3p\`. By default the data download will save all third party data to this folder and all other files will expect to find the datasets with that root path. To move the data outside this location use a directory symbolic link.
+To prevent the QGIS links and code files from breaking we use a fixed location for the third party data, `data/{version}/in-3p/`. By default the data download (`01a-download-input-data.py`) saves all third party data to this folder. To avoid syncing this data to OneDrive and to share it across versions, we replace the contents of `in-3p` with symbolic links pointing to a shared directory (`C:\data-3p`).
 
-For this we use a symbolic link, rather than a junction because using a junction will cause OneDrive to sync the linked content.
+We use symbolic links rather than junctions because junctions cause OneDrive to sync the linked content.
 
-1. Open a command prompt with administrator privileges.
-Click Start, type `cmd`, select Run as administrator. You’ll get the UAC prompt.
-2. Using a windows command prompt make sure you are in the data folder of the project
+### Setup using U01-setup-symbolic-links.bat
+
+The `U01-setup-symbolic-links.bat` script automates the creation of symbolic links for all expected third party datasets. It links each dataset folder in `data/{version}/in-3p/` to the corresponding folder in `C:\data-3p`.
+
+**First time setup (migrating existing data):**
+
+1. Run `01a-download-input-data.py` to download third party datasets into `data/{version}/in-3p/`.
+2. Manually move each dataset folder from `data/{version}/in-3p/` to `C:\data-3p`. For example:
 ```batch
-cd <path to project>\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features\data\v1-0
+move "data\v1-0\in-3p\AU_AIMS_Coastline_50k_2024" "C:\data-3p\AU_AIMS_Coastline_50k_2024"
 ```
-3. Create the symbolic link to where the data is stored. You probably need to ensure this folder exists first (untested)
+3. Open a command prompt as Administrator and run:
 ```batch
-mklink /D "in-3p" "C:\data-3p\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features\in-3p"
+U01-setup-symbolic-links.bat v1-1
+```
+The script creates symbolic links for any dataset that exists in `C:\data-3p` but is missing from `in-3p`.
+
+**Setting up a new version (e.g. v1-2):**
+
+If datasets are already in `C:\data-3p` from a previous version, simply run:
+```batch
+U01-setup-symbolic-links.bat v1-2
+```
+This creates all the symbolic links in the new version's `in-3p` folder without duplicating data.
+
+**Script behaviour:**
+- `[LINK]` — dataset found in `C:\data-3p`, symlink created.
+- `[SKIP]` — folder already exists in `in-3p` (symlink or real folder), no action taken.
+- `[MISS]` — dataset not found in either location. Run `01a-download-input-data.py` first, then move the folder to `C:\data-3p`.
+
+### Manual alternative
+
+If you cannot run the script, you can create individual symbolic links manually in an Administrator command prompt:
+```batch
+cd <path to project>\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features\data\v1-0\in-3p
+mklink /D "AU_AIMS_Coastline_50k_2024" "C:\data-3p\AU_AIMS_Coastline_50k_2024"
 ```
 
-If you can't set up a symbolic link and still want to store the data in a separate folder then you can simply edit the paths in scripts and the paths in the QGIS preview-maps.qgz.
+### Removing a link
 
-### Removing the link
-
-Deleting the link does **not** delete the data: `rmdir in-3p`. Only the symbolic link is removed.
+Deleting a symbolic link does **not** delete the data: `rmdir AU_AIMS_Coastline_50k_2024`. Only the link is removed, the shared data in `C:\data-3p` is unaffected.
 
 ## Debug:
 ERROR conda.core.link:_execute(938): An error occurred while installing package 'conda-forge::libjpeg-turbo-3.0.0-hcfcfb64_1'.
@@ -186,13 +218,16 @@ Clips the reef features dataset against the Australian coastline to remove any p
 This applies an updated `RB_Type_L3` that factors out `Attachment` and `DepthCat` from the RB_Type_L3 classifications. This also detects and corrects any incorrect winding of the polygons. Manual edits were then applied to the output of this script.
 
 - **`10-clip-land.py`**
-This script clips the Reef_boundaries_{current version}_edit to the coastline.
+This script clips the Reef_boundaries_{current version}_edit to the coastline. After clipping, multipart features are exploded to singleparts. A QA shapefile is produced listing any features that were split into multiple parts by the land clipping.
 
-- **`11-expand-attribs.py`**
+- **`11-allocate-ReefIDs.py`**
+Assigns permanent, globally unique ReefIDs to reef features after land clipping. IDs are allocated at the L2 reef level (the whole geological structure) with alphabetic sub-feature suffixes for multi-component reefs. IDs persist across dataset versions via spatial matching against the previous version. Use `--fresh` for first-time allocation.
+
+- **`12-expand-attribs.py`**
 Adds external classification scheme fields (e.g. NVCL, Seamap, Wetlands) to the edited features via a crosswalk and recalculates area and EdgeAcc_m types, outputting a harmonised publication-ready shapefile. This script creates the final output dataset `full-classes/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L3_v1-0.shp`.
 
-- **`12-make-RB_Type_L2.py`**
-Dissolves full RB_TYPE_L3 classified version of the dataset features to RB_Type_L2 extents, aggregating L3 attributes and deriving representative Attachment, DepthCat, confidence, and edge accuracy metrics per dissolved reef polygon. This dataset is useful for counting reefs, or understanding the full extent of reefs as 'Coral Reef Flats' are dissolved with touching 'Coral Reefs'. This script creates the final output dataset `simp-classes/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L2_v1-0.shp`
+- **`13-make-RB_Type_L2.py`**
+Dissolves full RB_TYPE_L3 classified version of the dataset features to RB_Type_L2 extents, aggregating L3 attributes and deriving representative Attachment, DepthCat, confidence, and edge accuracy metrics per dissolved reef polygon. Includes the base ReefID (without sub-feature letter) for each dissolved reef. This dataset is useful for counting reefs, or understanding the full extent of reefs as 'Coral Reef Flats' are dissolved with touching 'Coral Reefs'. This script creates the final output dataset `simp-classes/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L2_v1-0.shp`
 
 - **`V01-v0-4-generate-validation-locations.py`**
 Validation: Generates stratified multi-batch validation datasets (centroids, simplified extents, boundary-error points, plus fake locations) for multiple validators across 12 regions.
@@ -231,12 +266,13 @@ Compares manual and automated reef masks to evaluate true positives, false posit
 From time to time this dataset will be improved, making a new version of the dataset. The following are notes on what is needed to be set up when making a new version. Note: This list is not exhaustive and was written mid-way through the development of v1-0 and so is not tested end-to-end.
 1. Make sure that you have downloaded `data/{current version}` by running `01a-download-input-data.py`. 
 2. Make sure there is a release and tag in GitHub for the current version before you start modifying the code. We might have forgotten to set this up during the previous publication.
-3. Rename `data/{current version}` to `data/{new version}`. 
+3. Copy `data/{current version}` to `data/{new version}`. 
 4. Update the version number in `data/in/Reef-Boundaries_{version}_edit.shp`. This will now be the file that we edit to make the new version of the dataset.
-5. Rename `data/{new version}/*-{current version}.qgz` to have the new version number. Open each of these in QGIS and update the broken links to the change in the version number.
-6. Edit `config.ini` and change the `version` and `in_3p_path` to match the new version.
+5. Rename `data/{new version}/*-{current version}.qgz` to have the new version number. Open each of these in QGIS and update the broken links to the change in the version number. Update the layer names for `Reef boundary Edit {version}` to the new current version.
+6. Edit `config.ini` and change the versions in all the current and previous paths. 
 7. Create a new entry in CHANGELOG.md to record a summary of all the modifications for this version.
-8. Run `10-clip-land.py`, `11-expand-attribs.py` and `12-make-RB_Type_L2.py` to determine whether the pipeline works before making changes to the dataset.
+8. Run `10-clip-land.py`, `11-allocate-ReefIDs.py`, `12-expand-attribs.py` and `13-make-RB_Type_L2.py` to determine whether the pipeline works before making changes to the dataset. For the first version with ReefIDs, run `python 11-allocate-ReefIDs.py --fresh`. For subsequent versions, the script matches against the previous version automatically.
+9. Once the new version is complete and rebuilt, publish the new data to nextcloud.eatlas.org.au, add a summary of the changes to the changelog of the dataset metadata, update the version number in the citation text, update the DOI version number, publish the new version to eAtlas GeoServer.
 
 ### Errors and problems
 The following errors and problems can occur when making a new version of the dataset.
@@ -244,6 +280,24 @@ The following errors and problems can occur when making a new version of the dat
 #### Running `10-clip-land.py`: ValueError: Input GeoDataFrame contains 1 invalid geometries.
 This indicates that one of the adjusted features has a cross over in its polygons. Open the input_invalid shapefile in QGIS to determine the problem location.
 ![Screen shot of using QGIS to view the working/v1-0/10/NW-Aus-Features_v1-0_input_invalid.shp to identify the feature with the invalid geometry then editing the Reef-Boundaries_v1-0.shp to correct the problem. The arrow indicates the geometry problem](media/qgis-correcting-invalid-geometry.png)
+
+## ReefID Workflow
+
+ReefIDs are permanent identifiers for reefs, serving as placeholder names for the majority of features that have no published name. They are allocated by `11-allocate-ReefIDs.py` at the L2 (whole reef) level with sub-feature letters for L3 parts.
+
+**ID structure:** `R-{grid cell}-{counter}` for the base reef ID. Sub-features carry a letter suffix: `R-{grid cell}-{counter}{letter}`. The grid cell is a 4-digit base-10 code encoding the centroid longitude and latitude into a 100x100 global grid (3.6 deg lon x 1.8 deg lat cells). The counter is zero-padded to 3 digits.
+
+**Persistence:** When a new version is produced, ReefIDs are carried forward by spatially matching each current reef against the previous published version. Reefs with >50% area overlap inherit the previous identifier. New reefs receive new IDs.
+
+**Manual override:** Where large boundary changes break spatial matching, set the `ReefID` field in the Edit shapefile for the affected feature. This value propagates through land clipping and forces the script to use it for the L2 group containing that feature.
+
+**Handling splits:** When a previously single-component reef is subdivided, the original base ID is retained and both components receive letter suffixes. `PrevReefID` is set on both components.
+
+**Handling poor matches:** After running the script, review `working/{version}/11/ReefID-poor-matches.shp` for groups that could not be matched. Add manual overrides in the Edit file for any that should retain a previous ID, then re-run the pipeline.
+
+**Land-split QA:** Review `working/{version}/10/NW-Aus-Features_{version}_land-splits.shp` for features unexpectedly split into multiple parts by land clipping.
+
+**First-time allocation:** Run `python 11-allocate-ReefIDs.py --fresh` when no previous version with ReefIDs exists.
 
 ## Validation sampling
 
