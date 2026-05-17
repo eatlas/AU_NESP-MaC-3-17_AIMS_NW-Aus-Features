@@ -9,6 +9,9 @@ It should be noted that this dataset was largely created manually and these scri
 # Version summaries
 This provides a brief overview of each version of the dataset. A detailed log of changes made is provided in the [CHANGELOG.md](CHANGELOG.md).
 
+## v1-1 - Permanent ReefIDs
+This version focused on assigning permanent unique identifiers to each mapped features. To ensure IDs were not assigned to false reefs we cleaned up small sliver features created due to the land clipping. This version added the `11-allocate-ReefIDs.py` to manage the ID allocation, and reallocation for new versions of the dataset, copying over previously allocated IDs and assigning new ones as needed.
+
 ## v1-0 - All depth classification complete - Satellite only reef mapping
 This version primarily focused on the completion of assigning depth classifications to all reefs, based on satellite depth estimates using the infrared, red and green channels. These depth estimates are fairly crude, but are relatively consistent across the whole study area. In the next version of the dataset we will be calibrating and assessing the accuracy of the depth classifications based on a comparison with the AHO marine charts.
 
