@@ -28,7 +28,7 @@ downloader.download_path = in_3p_path  # Switch to the in_3p path for downloadin
 # This was needed to determine the potential overlap point between the existing Torres Strait reef mapping
 # and the new mapping in the Gulf of Carpentaria.
 direct_download_url = 'https://nextcloud.eatlas.org.au/s/xQ8neGxxCbgWGSd/download/TS_AIMS_NESP_Torres_Strait_Features_V1b_with_GBR_Features.zip'
-downloader.download_and_unzip(direct_download_url, 'Complete-GBR-feat_V1b')
+downloader.download_and_unzip(direct_download_url, 'TS-GBR-Feat')
 
 
 # --------------------------------------------------------
@@ -140,8 +140,9 @@ downloader.download_and_unzip(direct_download_url, 'AU_AIMS_Shallow-mask', flatt
 # https://nextcloud.eatlas.org.au/apps/sharealias/a/AU_NESP-MaC-3-17_AIMS_Rocky-reefs
 # https://github.com/eatlas/AU_NESP-MaC-3-17_AIMS_Rocky-reefs
 # This is used for creating the v0-3 shallow sediment mask used for the UQ habitat mapping
-direct_download_url = f'https://nextcloud.eatlas.org.au/s/QD84aRGoKYs3KtP/download?path=%2FV1%2Fout'
-downloader.download_and_unzip(direct_download_url, 'AU_AIMS_Rocky-reefs', flatten_directory = True)
+# Removed in later versions as the rocky reefs are now manually mapped.
+# direct_download_url = f'https://nextcloud.eatlas.org.au/s/QD84aRGoKYs3KtP/download?path=%2FV1%2Fout'
+# downloader.download_and_unzip(direct_download_url, 'AU_AIMS_Rocky-reefs', flatten_directory = True)
 
 # --------------------------------------------------------
 # Alcock, M.B.,Taffs, N.J., Zhong, Q. (2020) Seas and Submerged Lands Act 1973 - Australian Maritime Boundaries 2020 - Geodatabase. Geoscience Australia. https://pid.geoscience.gov.au/dataset/ga/144571
