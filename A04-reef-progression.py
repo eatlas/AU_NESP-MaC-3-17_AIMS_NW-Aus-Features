@@ -38,14 +38,15 @@ Normalisation pipeline (applied to every version so versions are comparable):
 
 Countable reef pipeline (applied after step 8, before size classification):
 9. cluster_countable(): buffer each fused reef by 50 m and unary-union the
-   buffers to group reefs closer than the buffer into single clusters (the
-   buffer is used for grouping only). Each cluster is mapped back to its
-   original (unbuffered) member reefs, whose union (multi-part where the
-   members are separated) provides the area and effective width; clusters
-   with effective width < 100 m are dropped and the survivors are re-binned
-   into size classes. Clusters containing both coral and rocky members are
-   assigned the type with the larger member area. This yields the
-   "countable reefs" set used for the count plots.
+    buffers to group reefs closer than the buffer into single clusters (the
+    buffer is used for grouping only; core algorithm in
+    reef_utils.cluster_countable, wrapped here with per-version caching).
+    Each cluster is mapped back to its original (unbuffered) member reefs,
+    whose union (multi-part where the members are separated) provides the
+    area and effective width; clusters with effective width < 100 m are
+    dropped and the survivors are re-binned into size classes. Because the
+    clustering is per L2 class, every cluster is a single type. This yields
+    the "countable reefs" set used for the count plots.
 
 Integrity check:
 The v1.2 L2 reef set produced by this pipeline (before the region filter,
@@ -66,7 +67,7 @@ Outputs (working/A04/):
   by size class.
 - figs/fig-countable-areas.png:  countable area as % of the v1.2 values,
   by size class.
-- figs/fig-absolute.png (also saved as fig-absolute-countable.png): left:
+- figs/fig-absolute.png: left:
   total countable reef count; right: total countable area. Coral and rocky
   reefs in both panels (all size classes, effective width >= 100 m).
 
@@ -86,6 +87,8 @@ import sys
 import time
 
 import geopandas as gpd
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -99,7 +102,8 @@ os.chdir(ROOT)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from reef_utils import SLIVER_EPS, dissolve_to_l2_components  # noqa: E402
+from reef_utils import cluster_countable as utils_cluster_countable  # noqa: E402
+from reef_utils import dissolve_to_l2_components  # noqa: E402
 
 cfg = configparser.ConfigParser()
 cfg.read("config.ini")
@@ -461,10 +465,20 @@ def process_version(vspec, lookups, clip_land_module, region_union=None,
     print(f"\n=== {version} ({note}) ===")
 
     cache_file = os.path.join(CACHE_DIR, f"{version}_L2_reefs.shp")
+    no_region_cache_file = os.path.join(CACHE_DIR, f"{version}_L2_reefs_no_region.shp")
     if apply_region and os.path.exists(cache_file):
         gdf = gpd.read_file(cache_file)
         print(f"  Loaded {len(gdf)} fused reefs from cache ({cache_file})")
         return gdf
+
+    if not apply_region and os.path.exists(no_region_cache_file):
+        gdf = gpd.read_file(no_region_cache_file)
+        print(f"  Loaded {len(gdf)} fused reefs from cache ({no_region_cache_file})")
+        return gdf
+
+    if apply_region and version == "v1.2" and os.path.exists(no_region_cache_file):
+        os.remove(no_region_cache_file)
+        print(f"  Invalidated no-region cache for v1.2 (v1.2 was recalculated)")
 
     start_time = time.time()
     print(f"  Reading {vspec['shapefile']}")
@@ -510,16 +524,35 @@ def process_version(vspec, lookups, clip_land_module, region_union=None,
     gdf["EffWidth_m"] = 2.0 * np.sqrt(area_m2 / np.pi)
     gdf = gdf.dropna(subset=["EffWidth_m"])
 
+    os.makedirs(CACHE_DIR, exist_ok=True)
     if apply_region:
-        os.makedirs(CACHE_DIR, exist_ok=True)
         gdf.to_file(cache_file)
+        countable_cache = os.path.join(CACHE_DIR, f"{version}_countable.shp")
+        if os.path.exists(countable_cache):
+            os.remove(countable_cache)
+            print(f"  Invalidated countable reef cache for {version}")
+        size_classified_cache = os.path.join(CACHE_DIR, f"{version}_size_classified.shp")
+        if os.path.exists(size_classified_cache):
+            os.remove(size_classified_cache)
+            print(f"  Invalidated size-classified cache for {version}")
         print(f"  Cached fused reefs to {cache_file} "
+              f"(total: {time.time() - start_time:.0f} s)")
+    else:
+        gdf.to_file(no_region_cache_file)
+        print(f"  Cached fused reefs (no region filter) to {no_region_cache_file} "
               f"(total: {time.time() - start_time:.0f} s)")
     return gdf
 
 
-def size_classify(gdf):
+def size_classify(gdf, version=None):
     """Drop reefs with effective width < MIN_EFF_WIDTH_M and assign size classes."""
+    cache_file = None
+    if version:
+        cache_file = os.path.join(CACHE_DIR, f"{version}_size_classified.shp")
+        if os.path.exists(cache_file):
+            print(f"  Loaded size-classified reefs from cache ({cache_file})")
+            return gpd.read_file(cache_file)
+
     n_before = len(gdf)
     gdf = gdf[gdf["EffWidth_m"] >= MIN_EFF_WIDTH_M].copy()
     print(f"  Dropped {n_before - len(gdf)} reefs with effective width < "
@@ -529,118 +562,56 @@ def size_classify(gdf):
     gdf["SizeClass"] = pd.cut(
         gdf["EffWidth_m"], bins=bins, labels=labels, include_lowest=True
     )
+
+    if cache_file:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        gdf.to_file(cache_file)
+        print(f"  Cached size-classified reefs to {cache_file}")
     return gdf
 
 
 def cluster_countable(gdf, version):
-    """Cluster fused reefs into "countable reefs".
+    """Cluster fused reefs into "countable reefs" (see
+    reef_utils.cluster_countable for the algorithm).
 
-    Grouping: each fused reef is buffered by CLUSTER_BUFFER_M and the
-    buffers are unary-unioned, so reefs within the buffer of each other
-    merge into a single cluster. The buffer is used ONLY to determine the
-    grouping; it does not enter any measurement.
-
-    Measurement: each cluster is mapped back to its original (unbuffered)
-    member reefs, whose geometries are unioned (closely clustered reefs
-    form multi-part polygons). The cluster's area and effective width are
-    computed from that unbuffered union, so areas are true reef areas.
-    Clusters with an effective width < COUNTABLE_WIDTH_M are dropped and
-    the survivors are binned into COUNTABLE_SIZE_CLASSES. A cluster whose
-    members span both L2 types is assigned the type with the larger member
-    area.
+    A04 wrapper around the shared reef_utils.cluster_countable: applies
+    the A04 countable constants, per-version shapefile caching, and the
+    summary print. The clustering itself (buffer grouping, measurement,
+    small-cluster dropping, size binning) lives in reef_utils so it can
+    be reused by other analyses with their own caching and constants.
 
     Input: fused L2 reefs in PROCESS_CRS with Area_km2 and EffWidth_m
     (the output of process_version, before size_classify).
     Output: GeoDataFrame in PROCESS_CRS with RB_Type_L2, Area_km2,
     EffWidth_m and SizeClass.
     """
-    projected = gdf.to_crs(AREA_CRS)
+    cache_file = os.path.join(CACHE_DIR, f"{version}_countable.shp")
+    if os.path.exists(cache_file):
+        out = gpd.read_file(cache_file)
+        print(f"  Loaded {len(out)} countable reefs from cache ({cache_file})")
+        return out
 
-    # Grouping: buffered union -> single-part cluster boundaries
-    union = unary_union(projected.geometry.buffer(CLUSTER_BUFFER_M))
-    comps = (
-        gpd.GeoDataFrame(geometry=[union], crs=AREA_CRS)
-        .explode(index_parts=False)
-        .reset_index(drop=True)
+    out, stats = utils_cluster_countable(
+        gdf,
+        buffer_m=CLUSTER_BUFFER_M,
+        min_width_m=COUNTABLE_WIDTH_M,
+        drop_small=True,
+        size_classes=COUNTABLE_SIZE_CLASSES,
+        buffer_crs=AREA_CRS,
     )
-    comps["_comp_id"] = range(len(comps))
-    n_clusters = len(comps)
 
-    # Assign each member reef to its cluster via representative point
-    # (guaranteed to lie inside the reef, hence inside one cluster), with an
-    # intersects fallback for rare floating-point edge cases (same approach
-    # as reef_utils.dissolve_to_l2_components).
-    members = projected.copy()
-    members["_member_idx"] = members.index
-    members["geometry"] = members.geometry.representative_point()
-    joined = gpd.sjoin(
-        members[["_member_idx", "RB_Type_L2", "Area_km2", "geometry"]],
-        comps[["_comp_id", "geometry"]],
-        predicate="within",
-        how="left",
-    )
-    unassigned = joined[joined["_comp_id"].isna()]
-    if not unassigned.empty:
-        un_feats = projected.loc[
-            unassigned["_member_idx"].tolist(),
-            ["_member_idx", "RB_Type_L2", "Area_km2", "geometry"],
-        ]
-        un_feats["geometry"] = un_feats.geometry.representative_point()
-        fallback = gpd.sjoin(
-            un_feats, comps[["_comp_id", "geometry"]],
-            predicate="intersects", how="left",
-        ).drop_duplicates(subset="_member_idx")
-        for _, row in fallback.iterrows():
-            joined.loc[joined["_member_idx"] == row["_member_idx"],
-                       "_comp_id"] = row["_comp_id"]
-        still = joined[joined["_comp_id"].isna()]
-        if not still.empty:
-            print(f"  WARNING: {version}: {len(still)} reefs could not be "
-                  f"assigned to a cluster")
-
-    rows = []
-    n_dropped = 0
-    n_mixed = 0
-    for comp_id, member_reefs in joined.dropna(subset=["_comp_id"]).groupby("_comp_id"):
-        member_idx = member_reefs["_member_idx"].tolist()
-        geom = unary_union(projected.loc[member_idx, "geometry"])
-        # Sliver repair (same as reef_utils.dissolve_to_l2_components) to
-        # clean internal seams without changing the extent or the area
-        geom = geom.buffer(SLIVER_EPS).buffer(-SLIVER_EPS)
-        geom = geom.simplify(SLIVER_EPS, preserve_topology=True)
-        area_m2 = geom.area
-        eff_width = 2.0 * np.sqrt(area_m2 / np.pi)
-        if eff_width < COUNTABLE_WIDTH_M:
-            n_dropped += 1
-            continue
-        stats = member_reefs.groupby("RB_Type_L2").agg(
-            area=("Area_km2", "sum"), n=("Area_km2", "size")
-        )
-        if len(stats) > 1:
-            n_mixed += 1
-        l2 = stats.sort_values(["area", "n"], ascending=False).index[0]
-        rows.append({
-            "RB_Type_L2": l2,
-            "Area_km2": area_m2 / 1e6,
-            "EffWidth_m": eff_width,
-            "geometry": geom,
-        })
-
-    out = gpd.GeoDataFrame(rows, crs=AREA_CRS).to_crs(PROCESS_CRS)
-    bins = [lo for _, lo, _ in COUNTABLE_SIZE_CLASSES] + [np.inf]
-    labels = [name for name, _, _ in COUNTABLE_SIZE_CLASSES]
-    out["SizeClass"] = pd.cut(
-        out["EffWidth_m"], bins=bins, labels=labels, include_lowest=True
-    )
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    out.to_file(cache_file)
+    print(f"  Cached countable reefs to {cache_file}")
 
     n_coral = int((out["RB_Type_L2"] == "Coral Reef").sum())
     n_rocky = int((out["RB_Type_L2"] == "Rocky Reef").sum())
-    print(f"  {version} countable: {n_clusters} clusters "
-          f"({len(gdf)} fused reefs, {len(gdf) - n_clusters} merged with "
-          f"neighbours), {n_dropped} dropped by effective width < "
-          f"{COUNTABLE_WIDTH_M:.0f} m, {len(out)} countable reefs "
-          f"({n_coral} coral, {n_rocky} rocky)"
-          + (f", {n_mixed} mixed-type clusters" if n_mixed else ""))
+    print(f"  {version} countable: {stats['n_clusters']} clusters "
+          f"({stats['n_fused']} fused reefs, "
+          f"{stats['n_fused'] - stats['n_clusters']} merged with neighbours), "
+          f"{stats['n_dropped']} dropped by effective width < "
+          f"{COUNTABLE_WIDTH_M:.0f} m, {stats['n_countable']} countable reefs "
+          f"({n_coral} coral, {n_rocky} rocky)")
     return out
 
 
@@ -768,7 +739,8 @@ def _set_version_ticks(ax, vspecs, x_metric="effort_hours"):
     """Continuous x-axis in x_metric units with the version labels at each
     version's position (so equal effort increments get equal axis space)."""
     ax.set_xticks([v[x_metric] for v in vspecs])
-    ax.set_xticklabels([v["version"] for v in vspecs])
+    ax.set_xticklabels([f"{v[x_metric]:.0f}\n{v['version']}" for v in vspecs],
+                       rotation=0, ha="right")
     ax.set_xlabel("Cumulative mapping effort (hours)")
 
 
@@ -790,14 +762,21 @@ def plot_fraction(table, metric, filename, suptitle,
                     marker="o", lw=1.5, color=CLASS_COLORS[name], label=name)
         _set_version_ticks(ax, vspecs, x_metric)
         ax.set_title(l2)
-        ax.set_ylim(0, 105)
+        ax.set_ylim(20, 150)
         ax.grid(alpha=0.3)
         ax.legend(loc="lower right", fontsize=9)
     axes[0].set_ylabel(f"% of v1.2 {'count' if metric == 'N' else 'area'}")
     fig.suptitle(suptitle)
     fig.tight_layout()
-    out = os.path.join(FIG_DIR, filename)
-    fig.savefig(out, dpi=150)
+    out = os.path.abspath(os.path.join(FIG_DIR, filename))
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    try:
+        fig.savefig(out, dpi=150)
+    except OSError as e:
+        raise OSError(
+            f"Failed to save figure to {out}: {e}\n"
+            f"  Check that the directory exists and you have write permissions."
+        )
     plt.close(fig)
     print(f"  Saved {out}")
 
@@ -807,17 +786,23 @@ def plot_absolute(table, filename, size_classes, min_width_m,
     """Total count and total area over the given size classes."""
     vspecs = VERSIONS
     fig, axes = plt.subplots(1, 2, figsize=(13, 5.5))
+    x_vals = [v[x_metric] for v in vspecs]
     for l2 in KEEP_L2:
         n_total = sum(
             table[f"N_{type_key(l2)}_{n.replace(' ', '')}"] for n, _, _ in size_classes
         )
-        a_total = sum(
-            table[f"Area_km2_{type_key(l2)}_{n.replace(' ', '')}"]
-            for n, _, _ in size_classes
-        )
-        for ax, series in zip(axes, (n_total, a_total)):
-            ax.plot([v[x_metric] for v in vspecs], series.to_numpy(float),
-                    marker="o", lw=1.5, color=TYPE_COLORS[l2], label=l2)
+        axes[0].plot(x_vals, n_total.to_numpy(float),
+                     marker="o", lw=1.5, color=TYPE_COLORS[l2], label=l2)
+    a_rocky_series = table[f"Area_km2_RockyReef_Total"].to_numpy(float)
+    a_coral_series = table[f"Area_km2_CoralReef_Total"].to_numpy(float)
+    a_total_series = a_rocky_series + a_coral_series
+    axes[1].fill_between(x_vals, 0, a_rocky_series,
+                         color=TYPE_COLORS["Rocky Reef"], alpha=0.8,
+                         label="Rocky reef area")
+    axes[1].fill_between(x_vals, a_rocky_series, a_total_series,
+                         color=TYPE_COLORS["Coral Reef"], alpha=0.8,
+                         label="Coral reef area")
+    axes[1].plot(x_vals, a_total_series, "k-", marker="o", lw=1, alpha=0.5)
     _set_version_ticks(axes[0], vspecs, x_metric)
     _set_version_ticks(axes[1], vspecs, x_metric)
     axes[0].set_ylabel(f"Number of reefs (effective width >= {min_width_m:.0f} m)")
@@ -826,12 +811,20 @@ def plot_absolute(table, filename, size_classes, min_width_m,
     axes[1].set_title("Reef area")
     for ax in axes:
         ax.grid(alpha=0.3)
-        ax.legend(loc="upper left", fontsize=10)
-    fig.suptitle("Total coral and rocky reef count and area by dataset version "
-                 f"(all size classes, effective width >= {min_width_m:.0f} m)")
+    axes[0].legend(loc="upper left", fontsize=10)
+    axes[1].legend(loc="upper left", fontsize=10)
+    fig.suptitle("Total coral and rocky reef count and area by dataset version (North and North West Marine Regions) "
+                 f"(effective width >= {min_width_m:.0f} m)")
     fig.tight_layout()
-    out = os.path.join(FIG_DIR, filename)
-    fig.savefig(out, dpi=150)
+    out = os.path.abspath(os.path.join(FIG_DIR, filename))
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    try:
+        fig.savefig(out, dpi=150)
+    except OSError as e:
+        raise OSError(
+            f"Failed to save figure to {out}: {e}\n"
+            f"  Check that the directory exists and you have write permissions."
+        )
     plt.close(fig)
     print(f"  Saved {out}")
     return out
@@ -867,7 +860,7 @@ def main():
     for vspec in VERSIONS:
         v = vspec["version"]
         print(f"\n=== {v}: size classification ===")
-        results[v] = size_classify(results[v])
+        results[v] = size_classify(results[v], version=v)
 
     table = build_table(results, SIZE_CLASSES)
     table.to_csv(TABLE_CSV, index=False)
@@ -907,9 +900,6 @@ def main():
         ctable, "fig-absolute.png",
         size_classes=COUNTABLE_SIZE_CLASSES, min_width_m=COUNTABLE_WIDTH_M,
     )
-    out_countable = os.path.join(FIG_DIR, "fig-absolute-countable.png")
-    shutil.copyfile(out, out_countable)
-    print(f"  Saved {out_countable}")
     print("\nDone.")
 
 

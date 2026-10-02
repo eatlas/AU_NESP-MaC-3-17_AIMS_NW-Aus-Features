@@ -1,0 +1,61 @@
+This script is to develop an analysis that shows the progression of the number of features in each stage of reef mapping development. We would expect to see that as we go from version to version of the dataset that the number of features increases, one as a function of effort, and as a function of new data, such as using bathymetry in from v0.4 to v1.0. Essentially I would like to end up with a plot that shows progression with each different size class of reefs (effective width by area: very small 30 - 100 m, small 100 - 300m, medium 300 - 1000m, large 1000m - 3000m, and very large >3000m). The goal of these plots is to show that at each stage of development more reefs were discovered. Towards the end these focused primarily on smaller and smaller reefs. The goal is to get some sense for how many more reefs are still to be discovered. 
+
+Read working/A04/changelog-summary.md to get an idea of the changes that occurred over the different versions. 
+
+The classifications applied to the reef boundaries progressed through different version of the reef mapping dataset. 
+Version, Classification attribute, Crosswalk attribute, Shapefile
+v0.1, Type, Type_v0-1, "data\v0-1_dual-maps\Reef-Features_Ref1_RB\Reef Boundaries RB.shp"
+v0.2, Type, Type_v0-2, "data\v0-2_merge-maps\Reef-boundaries-v0-2\Reef Boundaries Review RB.shp"
+v0.3, RB_Type_L3, RB_Type_L3_v0-3, "data\v0-3_qc-1\out\NW-Aus-Features_v0-3.shp"
+v0.4, RB_Type_L3, RB_Type_L3_v0-4, "data\v0-4\out\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_v0-4.shp"
+v1.0, RB_Type_L3, RB_Type_L3_v0-4, "data\v1-0\out\full-classes\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L3_v1-0.shp"
+v1.1, RB_Type_L3, RB_Type_L3_v0-4, "data\v1-1\out\full-classes\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L3_v1-1.shp"
+v1.2, RB_Type_L3, RB_Type_L3_v0-4, "data\v1-2\out\full-classes\AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L3_v1-2.shp"
+
+When writing this script assume that there might be future version of the dataset that will extend this series. So sepatate out the data / paths as global constants so it is easy to add a new version in the future.
+
+There is a crosswalk CSV file "data\v1-2\in\RB_Type_L3_crosswalk.csv". This has the following attributes: Type_v0-1, Type_v0-2, RB_Type_L3_v0-3, RB_Type_L3_v0-4. These correspond to the main reef classification attribute Type and RB_Type_L3 and the version number that they match the reef mapping, v0-1 = v0.1 of the reef mapping, v0-3 = v0.3 of the reef mapping. The same RB_Type_L3_v0-4 cross walk value is used for v0.4 through to v1.2.
+
+The cross walk has an output L2 classification (RB_Type_L2) that is suitable for this analysis. This converts the detailed input Type/RB_Type_L3 classification that has different types of corals reefs, and different types of rocky reefs to a classification of Coral Reef, Rocky Reef, Microbial Reef, Sediment Reef, Sediment, Reef Island, Other and Terrestrial Island. For this analysis we should exclude all features from further analysis that are not Coral Reef or Rocky Reef. 
+
+Here is a couple of rows of the crosswalk for reference:
+Type_v0-1	Type_v0-2	RB_Type_L3_v0-3	RB_Type_L3_v0-4	Attachment_v0-4	DepthCat_v0-4	RB_Type_L2
+			Coral Reef	Fringing	Intertidal	Coral Reef
+Fringing Coral Reef	Fringing Coral Reef	Fringing Coral Reef	Coral Reef	Fringing	Very Shallow;Shallow	Coral Reef
+			Coral Reef	Isolated	Intertidal	Coral Reef
+Platform Coral Reef	Platform Coral Reef	Platform Coral Reef	Coral Reef	Isolated	Very Shallow;Shallow	Coral Reef
+
+Note that the CSV also contains other fields not necessary for this analysis. These can be ignored.
+
+In this analysis we need to normalise all the versions so that there is an apples to apples comparison. For this we need to do several things:
+1. Standardise the classification to RB_Type_L2 (just Coral Reef and Rocky Reef). For this use the crosswalk lookup table.
+2. Clip the land from the reef features for versions where this was not done. This is to ensure that the area calculations do not include land. This needs to be done for v0.1 and v0.2. Other versions already have land clipped out. The clipping of the land may produce small shards and small polygons that were unindended. This is one reason why we will only include features that have an effective width >30 m in the analysis. This will hopefully remove most of these issues. Look at 10-clip-land.py for how clipping should be done. Where possible reuse this scripts functions rather than duplicate and rewrite.
+
+After these two steps we should have a fairly standard set of reefs across versions. We then need to perform clustering. The reducing to L2 classification for v0.4 - v1.2 will result in multiple neighbouring reefs to now be touching. An example is a long fringing reef that spans multiple bays where there is a mapped coral reef flat in the multiple bays. Multiple parts, all part of one reef. The crosswalk makes them all Coral Reef, but we need to convert them to fused reefs by dissolving touching reefs of the same type (Coral Reef to Coral Reef and Rocky Reef to Rocky Reef). This is done in 13-make-RB_Type_L2.py. Where possible reuse this logic.
+
+Now we have a L2 clustered reef dataset for each of the versions of the dataset. As a check we should probably flag any differences (other than the many unused attributes) between the L2 version of the datasets we made for v1.2 and the one created with 13-make-RB_Type_L2.py as this will signal that we made a mistake in this pipeline.
+
+We then need to calculate the effective width of each reef (width of a circle with the same area as the reef polygon), then categorise the features by size. We should then create a table that has:
+Version, 
+Mapping Effort in hours, 
+Number Coral Reefs Very Small, 
+Number Coral Reefs Medium,
+...
+Number Coral Reefs Very large,
+Number Rocky Reefs Very Small,
+...
+Area Coral Reefs Very Small, 
+Area Coral Reefs Medium,
+...
+Area Coral Reefs Very large,
+Area Rocky Reefs Very Small,
+...
+Area Rocky Reefs Very Large,
+Version Note - This should be a short one to two word indication of the major purpose of the version. The goal is to indicate why the number of reefs changed.
+
+We then need to produce some plots:
+Number of reef features as a function of mapping effort, marking the positions on the x-axis by version number. This is almost a plot of features/area as a function of the version number but spaced out on the x axis by the mapping effort. I am thinking that the x-axis is mapping effort in hours, with some tick marks, or labels for the version numbers. This is to ensure that progress expected by each version is not implied to be the same. The left panel should show coral reefs and the right panel rocky reefs. We split this way to minimise the number of lines on a plot. If we plot raw number of reef features we will have dramatically different counts (there are way more small reefs than large reefs), so we should plot them as fraction of the final reef counts by size category, i.e. all the and areas should be as a percentage relative to the v1.2 mapping. This way all lines should reach 100% at v1.2.
+
+We should have one version of this plot for counts, and one for areas.
+
+We should have a separate set of plots that show absolute numbers. This should show the total number of features, all size classes (exclusing <30 m) and area. This would be two panels, left coral and rocky reef count, right coral and rocky reef area. 
