@@ -23,7 +23,7 @@ Normalisation pipeline (applied to every version so versions are comparable):
    config.ini [general] version). This removes the GBR, south-west, temperate
    and oceanic features so that all versions cover the same area.
 4. Standardise the (version-specific) reef classification attribute to
-   RB_Type_L2 using the lookup table in data/v1-2/in/RB_Type_L3_crosswalk.csv.
+    RB_Type_L2 using the lookup table in data/{latest version}/in/RB_Type_L3_crosswalk.csv.
    Crosswalk keys may list several class values separated by semicolons; these
    are expanded. Class values absent from the crosswalk are mapped via
    CROSSWALK_OVERRIDES below (a warning is printed).
@@ -49,23 +49,23 @@ Countable reef pipeline (applied after step 8, before size classification):
     the "countable reefs" set used for the count plots.
 
 Integrity check:
-The v1.2 L2 reef set produced by this pipeline (before the region filter,
+The latest-version L2 reef set produced by this pipeline (before the region filter,
 i.e. national extent) is compared against the L2 shapefile produced by
 13-make-RB_Type_L2.py. Any differences in counts, area, or geometry are
 reported (they would signal a mistake in this pipeline).
 
-Outputs (working/A04/):
+Outputs (working/{latest version}/A04/):
 - reef-progression-table.csv: per version, per reef type, per size class:
   count and area of the standard set (effective width >= 30 m), plus effort
   hours and a short version note.
 - reef-progression-countable-table.csv: same layout for the countable set
   (clustered, effective width >= 100 m; size classes start at 100 m).
-- figs/fig-fraction-areas.png:   standard area as % of the v1.2 values, by
+- figs/fig-fraction-areas.png:   standard area as % of the latest-version values, by
   size class (left: coral reefs, right: rocky reefs), x = cumulative effort
   hours.
-- figs/fig-countable-counts.png: countable count as % of the v1.2 values,
+- figs/fig-countable-counts.png: countable count as % of the latest-version values,
   by size class.
-- figs/fig-countable-areas.png:  countable area as % of the v1.2 values,
+- figs/fig-countable-areas.png:  countable area as % of the latest-version values,
   by size class.
 - figs/fig-absolute.png: left:
   total countable reef count; right: total countable area. Coral and rocky
@@ -75,14 +75,14 @@ Adding a new version:
 Add one entry to VERSIONS below (shapefile path, class attribute, crosswalk
 key column, clip_land flag, cumulative effort hours, note) and the script
 picks it up. Keep VERSIONS in chronological order. Update the [general]
-version in config.ini to the new version; the analysis region file is read
-from its in-3p directory and applied to all versions.
+version and [paths] current_processed_L2 in config.ini to the new version;
+the crosswalk and analysis region file are read from its input directories
+and applied to all versions.
 """
 
 import configparser
 import importlib.util
 import os
-import shutil
 import sys
 import time
 
@@ -108,31 +108,28 @@ from reef_utils import dissolve_to_l2_components  # noqa: E402
 cfg = configparser.ConfigParser()
 cfg.read("config.ini")
 in_3p_path = cfg.get("general", "in_3p_path")
+LATEST_VERSION = cfg.get("general", "version")
 
 # ---- PATH CONSTANTS ----
-CROSSWALK_CSV = os.path.join("data", "v1-2", "in", "RB_Type_L3_crosswalk.csv")
+CROSSWALK_CSV = os.path.join("data", LATEST_VERSION, "in", "RB_Type_L3_crosswalk.csv")
 COASTLINE_FILE = os.path.join(
     in_3p_path,
     "AU_AIMS_Coastline_50k_2024",
     "Split",
     "AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_split.shp",
 )
-# L2 output of 13-make-RB_Type_L2.py, used for the v1.2 integrity check
-V1_2_L2_SHP = os.path.join(
-    "data", "v1-2", "out", "simp-classes",
-    "AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L2_v1-2.shp",
-)
+# L2 output of 13-make-RB_Type_L2.py, used for the latest-version integrity check
+LATEST_L2_SHP = cfg.get("paths", "current_processed_L2")
 # Analysis regions (NESP 3.17). Read from the in-3p directory of the latest
 # dataset version (the [general] version in config.ini) and applied to every
 # version so all versions cover the same area.
-LATEST_VERSION = cfg.get("general", "version")
 REGION_SHP = os.path.join(
     "data", LATEST_VERSION, "in-3p",
     "nesp-3-17-analysis-regions", "analysis-regions.shp",
 )
 # Regions kept in the analysis (feature centroids inside the dissolved union)
 REGION_NAMES = ("North-west", "North")
-OUTPUT_DIR = os.path.join("working", "A04")
+OUTPUT_DIR = os.path.join("working", LATEST_VERSION, "A04")
 FIG_DIR = os.path.join(OUTPUT_DIR, "figs")
 TABLE_CSV = os.path.join(OUTPUT_DIR, "reef-progression-table.csv")
 COUNTABLE_TABLE_CSV = os.path.join(OUTPUT_DIR, "reef-progression-countable-table.csv")
@@ -240,7 +237,7 @@ VERSIONS = [
         class_attr="RB_Type_L3",
         crosswalk_key="RB_Type_L3_v0-4",
         clip_land=False,
-        effort_hours=783.0,
+        effort_hours=786.0,
         note="Refinement",
     ),
 ]
@@ -456,7 +453,7 @@ def process_version(vspec, lookups, clip_land_module, region_union=None,
     With apply_region=True (default) the region filter is applied and the
     result is cached. With apply_region=False the pipeline is run without
     the region filter and without touching the cache; this is used to
-    recompute the national-extent v1.2 set for the integrity check against
+    recompute the national-extent latest-version set for the integrity check against
     13-make-RB_Type_L2.py.
     """
     version = vspec["version"]
@@ -476,9 +473,9 @@ def process_version(vspec, lookups, clip_land_module, region_union=None,
         print(f"  Loaded {len(gdf)} fused reefs from cache ({no_region_cache_file})")
         return gdf
 
-    if apply_region and version == "v1.2" and os.path.exists(no_region_cache_file):
+    if apply_region and version.replace(".", "-") == LATEST_VERSION and os.path.exists(no_region_cache_file):
         os.remove(no_region_cache_file)
-        print(f"  Invalidated no-region cache for v1.2 (v1.2 was recalculated)")
+        print(f"  Invalidated no-region cache for {version} ({version} was recalculated)")
 
     start_time = time.time()
     print(f"  Reading {vspec['shapefile']}")
@@ -615,16 +612,16 @@ def cluster_countable(gdf, version):
     return out
 
 
-def check_v1_2(ours):
-    """Compare our v1.2 L2 reefs against the output of 13-make-RB_Type_L2.py.
+def check_latest_version(ours, version):
+    """Compare latest-version L2 reefs against the output of 13-make-RB_Type_L2.py.
 
     'ours' must be the national-extent set (produced with
     apply_region=False); the 13-make-RB_Type_L2.py output is also national
     extent, so the comparison is unaffected by the analysis region filter.
     """
-    print("\n=== Integrity check: v1.2 (national extent) vs "
+    print(f"\n=== Integrity check: {version} (national extent) vs "
           "13-make-RB_Type_L2.py output ===")
-    ref = gpd.read_file(V1_2_L2_SHP)
+    ref = gpd.read_file(LATEST_L2_SHP)
     if ref.crs is None or ref.crs.to_epsg() != PROCESS_CRS:
         ref = ref.to_crs(PROCESS_CRS)
     ref = ref[ref["RB_Type_L2"].isin(KEEP_L2)].copy()
@@ -683,7 +680,7 @@ def check_v1_2(ours):
         for p in problems:
             print(f"    - {p}")
     else:
-        print("  OK: our v1.2 L2 reefs match the script-13 output "
+        print(f"  OK: our {version} L2 reefs match the script-13 output "
               "(counts, areas, geometries).")
     return not problems
 
@@ -733,20 +730,45 @@ CLASS_COLORS = {
     "Very Large": "#31a354",
 }
 TYPE_COLORS = {"Coral Reef": "#e6550d", "Rocky Reef": "#3183bd"}
+MIN_VERSION_TICK_GAP_PX = 20
 
 
 def _set_version_ticks(ax, vspecs, x_metric="effort_hours"):
-    """Continuous x-axis in x_metric units with the version labels at each
-    version's position (so equal effort increments get equal axis space)."""
-    ax.set_xticks([v[x_metric] for v in vspecs])
-    ax.set_xticklabels([f"{v[x_metric]:.0f}\n{v['version']}" for v in vspecs],
-                       rotation=0, ha="right")
+    """Keep real effort ticks; label close versions at the last tick."""
+    ax.get_xlim()
+    groups = []
+    for vspec in vspecs:
+        if (groups and abs(ax.transData.transform((vspec[x_metric], 0))[0] -
+                           ax.transData.transform((groups[-1][-1][x_metric], 0))[0])
+                < MIN_VERSION_TICK_GAP_PX):
+            groups[-1].append(vspec)
+        else:
+            groups.append([vspec])
+
+    tick_labels = {v[x_metric]: "" for v in vspecs}
+    grouped_ticks = set()
+    for group in groups:
+        if len(group) == 1:
+            v = group[0]
+            tick_labels[v[x_metric]] = f"{v[x_metric]:.0f}\n{v['version']}"
+        else:
+            last = group[-1]
+            versions = ",".join(v["version"].removeprefix("v") for v in group)
+            tick_labels[last[x_metric]] = f"{last[x_metric]:.0f}\nv{versions}"
+            grouped_ticks.add(last[x_metric])
+
+    ticks = sorted(tick_labels)
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([tick_labels[x] for x in ticks], rotation=0, ha="center")
+    for tick, label in zip(ticks, ax.get_xticklabels()):
+        if tick in grouped_ticks:
+            label.set_ha("left")
     ax.set_xlabel("Cumulative mapping effort (hours)")
 
 
 def plot_fraction(table, metric, filename, suptitle,
                   size_classes=SIZE_CLASSES, x_metric="effort_hours"):
-    """One line per size class, values as % of the final (v1.2) values.
+    """One line per size class, values as % of the final version's values.
 
     metric: 'N' or 'Area_km2'
     """
@@ -765,7 +787,7 @@ def plot_fraction(table, metric, filename, suptitle,
         ax.set_ylim(20, 150)
         ax.grid(alpha=0.3)
         ax.legend(loc="lower right", fontsize=9)
-    axes[0].set_ylabel(f"% of v1.2 {'count' if metric == 'N' else 'area'}")
+    axes[0].set_ylabel(f"% of {vspecs[-1]['version']} {'count' if metric == 'N' else 'area'}")
     fig.suptitle(suptitle)
     fig.tight_layout()
     out = os.path.abspath(os.path.join(FIG_DIR, filename))
@@ -831,6 +853,12 @@ def plot_absolute(table, filename, size_classes, min_width_m,
 
 
 def main():
+    latest_spec = VERSIONS[-1]
+    if latest_spec["version"].replace(".", "-") != LATEST_VERSION:
+        raise ValueError(
+            f"Last VERSIONS entry ({latest_spec['version']}) must match "
+            f"config.ini [general] version ({LATEST_VERSION})"
+        )
     os.makedirs(FIG_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -846,9 +874,9 @@ def main():
             vspec, lookups, clip_land_module, region_union
         )
 
-    v12_spec = next(v for v in VERSIONS if v["version"] == "v1.2")
-    check_v1_2(
-        process_version(v12_spec, lookups, clip_land_module, apply_region=False)
+    check_latest_version(
+        process_version(latest_spec, lookups, clip_land_module, apply_region=False),
+        latest_spec["version"],
     )
 
     countable = {}
@@ -881,20 +909,20 @@ def main():
         print(f"  Removed {stale} (replaced by fig-countable-counts.png)")
     plot_fraction(
         ctable, "N", "fig-countable-counts.png",
-        "Countable reef count by size class as a fraction of the v1.2 mapping "
-        "(% of final v1.2 values; 50 m buffer clusters, effective width >= 100 m)",
+        f"Countable reef count by size class as a fraction of the {latest_spec['version']} mapping "
+        f"(% of final {latest_spec['version']} values; 50 m buffer clusters, effective width >= 100 m)",
         size_classes=COUNTABLE_SIZE_CLASSES,
     )
     plot_fraction(
         ctable, "Area_km2", "fig-countable-areas.png",
-        "Countable reef area by size class as a fraction of the v1.2 mapping "
-        "(% of final v1.2 values; 50 m buffer clusters, effective width >= 100 m)",
+        f"Countable reef area by size class as a fraction of the {latest_spec['version']} mapping "
+        f"(% of final {latest_spec['version']} values; 50 m buffer clusters, effective width >= 100 m)",
         size_classes=COUNTABLE_SIZE_CLASSES,
     )
     plot_fraction(
         table, "Area_km2", "fig-fraction-areas.png",
-        "Reef area by size class as a fraction of the v1.2 mapping "
-        "(% of final v1.2 values)",
+        f"Reef area by size class as a fraction of the {latest_spec['version']} mapping "
+        f"(% of final {latest_spec['version']} values)",
     )
     out = plot_absolute(
         ctable, "fig-absolute.png",

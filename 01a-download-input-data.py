@@ -188,12 +188,38 @@ downloader.download_and_unzip(
 # Areas Database (CAPAD) 2024, Commonwealth of Australia 2025'.
 # This dataset is used in A02-unmapped-reefs to determine what fraction of reefs is within protected areas.
 # We need to keep the directory name very short due to the long file names in the CAPAD dataset.
+# This dataset is also used in A05-reef-distribution to determine what fraction of reefs is within protected areas.
 downloader.download_and_unzip(
     'https://hub.arcgis.com/api/v3/datasets/0b6e7b6c48a64a3a82c225fa48aee13d_1/downloads/data?format=shp&spatialRefId=4283&where=1%3D1',
     'CAPAD-2024',
     flatten_directory=True
 )
 
+
+# --------------------------------------------------------
+# Lawrey, E. (2025). Supporting datasets for estimating reef counts in the Coral Sea and northern Australia 
+# (NESP MaC 3.17, AIMS) (Version 1) \[Data set\]. eAtlas. https://doi.org/10.26274/xr0r-tb19
+# This is used for creating summary statistics
+downloader.download_and_unzip(
+    f'https://nextcloud.eatlas.org.au/s/HmSS5bxxgKdDxEP/download?path=%2Fv1%2Fin%2Fanalysis-regions',
+    'nesp-3-17-analysis-regions',
+    flatten_directory=True
+)
+
+# --------------------------------------------------------
+# Department of Climate Change, Energy, the Environment and Water. (2023). 
+# Integrated Marine and Coastal Regionalisation of Australia (IMCRA) v4.0 - Meso-scale Bioregions. [Data set].
+# https://fed.dcceew.gov.au/datasets/erin::integrated-marine-and-coastal-regionalisation-of-australia-imcra-v4-0-meso-scale-bioregions/about
+# This data is available under a CC BY 3.0 License.
+# This dataset is used for determining the reef count and area statistics (A05).
+# data\v{version}\in-3p\IMCRA-v4-0-Meso-Bioregions\IMCRA-v4-Mesoscale-Bioregions.shp
+downloader.download_and_unzip(
+    f'https://hub.arcgis.com/api/v3/datasets/7f83e6e00406487d88d52ac4c2d8c8d4_0/downloads/data?format=shp&spatialRefId=4283&where=1%3D1',
+    'IMCRA-v4-0-Meso-Bioregions',
+    flatten_directory=True,
+    file_find=["Integrated_Marine_and_Coastal_Regionalisation_of_Australia_(IMCRA)_v4.0_-_Meso-scale_Bioregions"],
+    file_replace=["IMCRA-v4-Mesoscale-Bioregions"]
+)
 
 
 

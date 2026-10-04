@@ -29,7 +29,7 @@
 # This script outputs the counts and percentages for each reef type to standard out. It doesn't generate visualisations.
 # This script uses Python, and GeoPandas
 #
-# Results:
+# Results v1-1:
 # --- Reef Mapping Analysis Results ---
 # Total Coral Reefs in GOC: 681
 # Total Rocky Reefs in GOC: 481

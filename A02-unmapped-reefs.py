@@ -54,6 +54,7 @@ OUT_DIR = f"working/{version}/A02"
 CLUSTERS_SHP = os.path.join(OUT_DIR, "countable-reef-clusters.shp")
 ANALYSIS_SHP = os.path.join(OUT_DIR, "unmapped-reefs-analysis.shp")
 MISSED_REEFS_SHP = os.path.join(OUT_DIR, "potential-missed-reefs.shp")
+REPORT_MD = f"data/{version}/out/stats/A02-unmapped-reefs_{version}.md"
 
 CRS_STORAGE = "EPSG:4283"
 CRS_METRIC = "EPSG:3112"
@@ -277,6 +278,154 @@ def _load_manual_tags(path, clusters):
     return set(joined["cluster_id"].unique())
 
 
+def _write_markdown_report(clusters, very_small, missed_counts):
+    """Write copy-ready Appendix B tables from the classified reef clusters."""
+    reef_types = ["Coral Reef", "Rocky Reef"]
+    sources = [
+        ("AHS seabed area features", "src_AHS"),
+        ("GA Geotopo 250k", "src_GA"),
+        ("ReefKIM", "src_KIM"),
+        ("UNEP coral reefs", "src_UNEP"),
+    ]
+    manual_sources = [
+        ("Bathymetry mapped", "src_bath_m"),
+        ("Bathymetry indicated", "src_bath_i"),
+        ("Chart mapped", "src_cht_m"),
+        ("Chart indicated", "src_cht_i"),
+    ]
+    size_classes = [
+        ("Small (100-300 m)", "Small"),
+        ("Medium (300-1,000 m)", "Medium"),
+        ("Large (1,000-3,000 m)", "Large"),
+        ("Very large (>3,000 m)", "Very large"),
+    ]
+
+    def table(caption, headers, rows):
+        lines = [caption, "", "| " + " | ".join(headers) + " |",
+                 "|" + "|".join(["---"] + ["---:"] * (len(headers) - 1)) + "|"]
+        lines.extend("| " + " | ".join(str(cell) for cell in row) + " |" for row in rows)
+        return "\n".join(lines)
+
+    def pct(numerator, denominator):
+        return f"{100 * numerator / denominator:.1f}" if denominator else "-"
+
+    def area(frame):
+        return f"{frame['c_area_km2'].sum():,.1f}"
+
+    total = len(clusters)
+    sections = [
+        f"# Assessment of previously unmapped reefs ({version})",
+        "Counts refer to countable coral and rocky reef clusters unless stated otherwise. "
+        "Areas are sums of cluster areas in EPSG:3112 (km²). Percentages use the "
+        "denominator stated in each caption. Supplementary tables are numbered separately.",
+    ]
+
+    rows = []
+    for reef_type in reef_types:
+        countable = clusters[clusters["RB_Type_L2"] == reef_type]
+        small = very_small[very_small["RB_Type_L2"] == reef_type]
+        rows.append([reef_type, f"{len(countable):,}", f"{len(small):,}", area(small)])
+    rows.append(["**Total**", f"**{total:,}**", f"**{len(very_small):,}**",
+                 f"**{area(very_small)}**"])
+    sections.append(table(
+        "**Table S1.** Reef clusters by type. Countable clusters have effective width at least "
+        f"{MIN_EFF_WIDTH_M} m; smaller clusters are excluded from subsequent tables.",
+        ["Reef type", "Countable clusters", "Very small clusters", "Very small area (km²)"], rows))
+
+    tier1 = clusters[[flag for _, flag in sources]]
+    any_tier1 = tier1.any(axis=1)
+    rows = []
+    for label, flag in sources:
+        matches = int(clusters[flag].sum())
+        unique = int((clusters[flag] & (tier1.sum(axis=1) == 1)).sum())
+        rows.append([label, f"{matches:,}", pct(matches, total), f"{unique:,}",
+                     pct(unique, total)])
+    combined = int(any_tier1.sum())
+    rows.append(["**Combined**", f"**{combined:,}**", f"**{pct(combined, total)}**",
+                 "-", "-"])
+    sections.append(table(
+        "**Table 1.** Individual and unique coverage of Tier 1 reference datasets. "
+        "Unique matches overlap no other Tier 1 source; percentages use all countable clusters.",
+        ["Dataset", "Total matches", "% of clusters", "Unique matches", "Unique %"], rows))
+
+    rows = []
+    for index, (label, flag) in enumerate(sources):
+        rows.append([label] + [f"{int((clusters[flag] & clusters[other]).sum()):,}"
+                                 if index < other_index else "-"
+                                 for other_index, (_, other) in enumerate(sources)])
+    sections.append(table(
+        "**Table 2.** Pairwise overlap between Tier 1 datasets, measured as the number "
+        "of countable clusters matched by both sources.",
+        ["Dataset"] + [label for label, _ in sources], rows))
+
+    rows = [[label, f"{int(clusters[flag].sum()):,}"] for label, flag in manual_sources]
+    sections.append(table(
+        "**Table 3.** Tier 2 manual tag matches. A cluster can be tagged by more than "
+        "one source or also match a Tier 1 dataset; rows are not additive.",
+        ["Category", "Clusters tagged"], rows))
+
+    statuses = ["Previously mapped", "Previously indicated", "Newly mapped"]
+    rows = []
+    for status in statuses:
+        counts = [int(((clusters["RB_Type_L2"] == reef_type) &
+                       (clusters["known_stat"] == status)).sum()) for reef_type in reef_types]
+        rows.append([status] + [f"{value:,}" for value in counts] + [f"{sum(counts):,}"])
+    rows.append(["**Total**"] +
+                [f"**{int((clusters['RB_Type_L2'] == reef_type).sum()):,}**"
+                 for reef_type in reef_types] + [f"**{total:,}**"])
+    sections.append(table(
+        "**Table 4.** Final classification of countable reef clusters by reef type. "
+        "Mapped sources take precedence over indicated sources.",
+        ["Status", "Coral Reef", "Rocky Reef", "All reefs"], rows))
+
+    rows = []
+    for label, size_class in size_classes:
+        row = [label]
+        for reef_type in reef_types:
+            typed = clusters[clusters["RB_Type_L2"] == reef_type]
+            in_class = typed[typed["size_class"] == size_class]
+            row.extend([f"{len(in_class):,}", area(in_class)])
+        rows.append(row)
+    rows.append(["**Total**"] +
+                [cell for reef_type in reef_types
+                 for cell in (f"**{int((clusters['RB_Type_L2'] == reef_type).sum()):,}**",
+                              f"**{area(clusters[clusters['RB_Type_L2'] == reef_type])}**")])
+    sections.append(table(
+        "**Table S2.** Countable reef clusters and area by effective-width size class and reef type.",
+        ["Size class", "Coral Reef (n)", "Coral Reef area (km²)",
+         "Rocky Reef (n)", "Rocky Reef area (km²)"], rows))
+
+    rows = []
+    for label, size_class in size_classes + [("**Total**", None)]:
+        row = [label]
+        for reef_type in reef_types:
+            typed = clusters[clusters["RB_Type_L2"] == reef_type]
+            in_class = typed[typed["size_class"] == size_class] if size_class else typed
+            new = in_class[in_class["known_stat"] == "Newly mapped"]
+            row.extend([f"{len(new):,}", pct(len(new), len(in_class)), area(new)])
+        rows.append(row)
+    sections.append(table(
+        "**Table 5.** Newly mapped reef clusters by size class. Percentages are of all "
+        "countable clusters of the same reef type and size class.",
+        ["Size class", "Coral Reef (n)", "Coral Reef (% of class)",
+         "Coral Reef area (km²)", "Rocky Reef (n)", "Rocky Reef (% of class)",
+         "Rocky Reef area (km²)"], rows))
+
+    rows = [[source, f"{int(missed_counts.get(source, 0)):,}"] for source in
+            ["AHS", "GA", "ReefKIM", "UNEP", "Bathy mapped", "Bathy indicated",
+             "Chart mapped", "Chart indicated"]]
+    rows.append(["**Total**", f"**{int(missed_counts.sum()):,}**"])
+    sections.append(table(
+        "**Table S3.** Potential missed reefs by reference source. Counts are reference "
+        "features without an intersection with any L2 feature after clipping to the study boundary.",
+        ["Source", "Features"], rows))
+
+    os.makedirs(os.path.dirname(REPORT_MD), exist_ok=True)
+    with open(REPORT_MD, "w", encoding="utf-8") as report:
+        report.write("\n\n".join(sections) + "\n")
+    print(f"\nMarkdown report saved to: {REPORT_MD}")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 2 — Full analysis
 # ─────────────────────────────────────────────────────────────────────────────
@@ -395,9 +544,9 @@ def run_analysis():
     vs_coral = very_small[very_small["RB_Type_L2"] == "Coral Reef"]
     vs_rocky = very_small[very_small["RB_Type_L2"] == "Rocky Reef"]
     print(f"\nVery small reef clusters (effective width < {MIN_EFF_WIDTH_M} m):")
-    print(f"  Coral Reef:  {len(vs_coral)}  ({vs_coral['c_area_km2'].sum():.3f} km\u00b2)")
-    print(f"  Rocky Reef:  {len(vs_rocky)}  ({vs_rocky['c_area_km2'].sum():.3f} km\u00b2)")
-    print(f"  Total:       {len(very_small)}  ({very_small['c_area_km2'].sum():.3f} km\u00b2)")
+    print(f"  Coral Reef:  {len(vs_coral)}  ({vs_coral['c_area_km2'].sum():.1f} km\u00b2)")
+    print(f"  Rocky Reef:  {len(vs_rocky)}  ({vs_rocky['c_area_km2'].sum():.1f} km\u00b2)")
+    print(f"  Total:       {len(very_small)}  ({very_small['c_area_km2'].sum():.1f} km\u00b2)")
 
     print(f"\nTier 1 automated matches:")
     print(f"  AHS:     {len(matched_ahs)} clusters")
@@ -432,8 +581,8 @@ def run_analysis():
         s = clusters[clusters["RB_Type_L2"] == reef_type]
         for sc_label, sc_key in _sc_rows:
             sc_sub = s[s["size_class"] == sc_key]
-            print(f"    {sc_label + ':':<27} {len(sc_sub):>4}  ({sc_sub['c_area_km2'].sum():.3f} km\u00b2)")
-        print(f"    {'Total:':<27} {len(s):>4}  ({s['c_area_km2'].sum():.3f} km\u00b2)")
+            print(f"    {sc_label + ':':<27} {len(sc_sub):>4}  ({sc_sub['c_area_km2'].sum():.1f} km\u00b2)")
+        print(f"    {'Total:':<27} {len(s):>4}  ({s['c_area_km2'].sum():.1f} km\u00b2)")
 
     print(f"\nSize class breakdown of newly mapped reefs:")
     for reef_type in ["Coral Reef", "Rocky Reef"]:
@@ -445,18 +594,19 @@ def run_analysis():
             n_new = (s_new["size_class"] == sc_key).sum()
             area_new = s_new[s_new["size_class"] == sc_key]["c_area_km2"].sum()
             pct = f"({100 * n_new / n_all:.1f}%)" if n_all > 0 else "(-)"
-            print(f"    {sc_label + ':':<27} {n_new:>4}  {pct:<8}  ({area_new:.3f} km\u00b2)")
+            print(f"    {sc_label + ':':<27} {n_new:>4}  {pct:<8}  ({area_new:.1f} km\u00b2)")
         n_new_total = len(s_new)
         n_all_total = len(s_all)
         area_new_total = s_new["c_area_km2"].sum()
         pct_total = f"({100 * n_new_total / n_all_total:.1f}%)" if n_all_total > 0 else "(-)"
-        print(f"    {'Total:':<27} {n_new_total:>4}  {pct_total:<8}  ({area_new_total:.3f} km\u00b2)")
+        print(f"    {'Total:':<27} {n_new_total:>4}  {pct_total:<8}  ({area_new_total:.1f} km\u00b2)")
 
     print(f"\nOutput: {ANALYSIS_SHP}")
 
     # Step 2.8 — Missed-reefs analysis
     print("\nStep 8: Missed-reefs analysis ...")
-    _run_missed_reefs_analysis(ahs, reefkim, unep, ga)
+    missed_counts = _run_missed_reefs_analysis(ahs, reefkim, unep, ga)
+    _write_markdown_report(clusters, very_small, missed_counts)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -538,6 +688,7 @@ def _run_missed_reefs_analysis(ahs, reefkim, unep, ga):
         print(f"    {row['source']:<18} {row['count']:>5}")
     print(f"    {'Total':<18} {len(missed):>5}")
     print(f"\n  Output: {MISSED_REEFS_SHP}")
+    return summary.set_index("source")["count"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@
 
 Compares two versions of the NW Australian reef boundary dataset to quantify changes:
 new features added, features deleted, boundary improvements, and attribute updates.
-Outputs a descriptive console report and a verification shapefile.
+Outputs a Markdown report to both stdout and a file, plus a verification shapefile.
 
 ## Configuration
 
@@ -48,6 +48,7 @@ All input paths are read from the `[paths]` section of `config.ini`.
 | File | Path | Description |
 |---|---|---|
 | Verification shapefile | `working/{version}/A03/Version-changes_{version}.shp` | All features with a `change` attribute. CRS: EPSG:4283. |
+| Version change report | `data/{version}/out/stats/A03-version-changes.md` | Markdown summary of feature matching and attribute changes, also printed to stdout. |
 
 The `change` attribute values: `unchanged`, `improved`, `new`, `deleted`.
 
@@ -138,45 +139,11 @@ only; not overlap-only improved features from Phase 3):
      for `new`, `deleted`, and overlap-only `improved` features (Phase 3).
 3. Set CRS to EPSG:4283. Save to `working/{version}/A03/Version-changes_{version}.shp`.
 
-### Step 7 — Console report
+### Step 7 — Markdown report
 
-Print a structured report. Each section includes a brief description followed by the
-count. Use this format:
-
-```
-=============================================================
-Version Change Report: {previous_version} → {version}
-=============================================================
-Input: {input_file_description}
-Previous version features: {n_old}
-Current version features:  {n_new}
-
---- Feature Matching ---
-Features with identical geometry found in both versions
-(indicating no change to the feature boundary):
-  Unchanged features: {n_unchanged}
-
-Features where the geometry overlaps between versions but is not
-identical (indicating an improvement to the boundary):
-  Improved features: {n_improved}
-    IoU-matched (>= {IOU_THRESHOLD}): {n_iou_improved}
-    Overlap-only:                     {n_overlap_improved}
-
-Features present in the current version with no spatial overlap
-with any feature in the previous version (indicating a newly
-digitised feature):
-  New features: {n_new_features}
-
-Features present in the previous version with no spatial overlap
-with any feature in the current version (indicating a removed
-feature):
-  Deleted features: {n_deleted}
-
---- Attribute Changes ---
-Among features with a 1:1 match (unchanged + IoU-matched improved),
-the number where one or more attributes ({attr_list}) were updated:
-  Features with attribute changes: {n_attr_changed} / {n_attr_compared}
-
-Verification shapefile saved to: {output_path}
-=============================================================
-```
+Build one Markdown report and write the same text to stdout and
+`data/{version}/out/stats/A03-version-changes.md`. Create the stats directory
+if needed. The report includes the input mode and paths, feature counts for
+both versions, unchanged/improved/new/deleted counts, IoU and overlap-only
+breakdowns, attribute changes among 1:1 matches, and the verification
+shapefile path.

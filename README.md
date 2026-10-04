@@ -1,13 +1,15 @@
 # North and West Australia Reef Features - GIS Dataset
 This repository contains utility scripts that were used in the development of the North and West Australia Reef Features dataset. For full information about this dataset see: 
 
-Lawrey, E., Bycroft, R., & Markey, K. (2025). North and West Australian Tropical Reef Features - Boundaries of coral reefs, rocky reefs and sand banks (NESP-MaC 3.17, AIMS, Aerial Architecture) (Version 1-0) [Data set]. eAtlas. https://doi.org/10.26274/XJ4V-2739
-
-
-It should be noted that this dataset was largely created manually and these scripts represent utilities that were used to process portions of the dataset production, and do not fully represent the workflow associated with the dataset as much of the processing was performed in QGIS. It should also be noted that most of these scripts refer to files that were intermediate files during the production and thus will not work directly from the public files. They are provided as a form of documentation, rather than to allow a blind rerun of the processing from scratch.
+Lawrey, E., Bycroft, R., & Markey, K. (2025). North and West Australian Tropical Reef Features - Boundaries of coral reefs, rocky reefs and sand banks (NESP-MaC 3.17, AIMS, Aerial Architecture) (Version 1-2) [Data set]. eAtlas. https://doi.org/10.26274/XJ4V-2739
 
 # Version summaries
 This provides a brief overview of each version of the dataset. A detailed log of changes made is provided in the [CHANGELOG.md](CHANGELOG.md).
+
+## v1-2 - Mapping refinements and NESP MaC Final Report analyses
+This version includes an additional 40 sand banks near the Dampier Archipelago and rocky reefs along parts of the northern Kimberley. Further fine-scale digitisation in the northern Kimberley improved the separation of rocky reefs, coral reefs and coral reef flats. Crosswalk adjustments made historical versions more comparable. ReefID allocation was also revised to handle reworked boundaries: when a previous L2 reef component is split into disconnected or reclassified parts, only its greatest-overlap successor inherits its base ID; other parts receive new IDs with their previous IDs recorded for lineage.
+
+Analysis for the final project report added `A04-reef-progression.py` to compare reef counts and areas across versions, `A05-reef-distribution.py` to report countable reefs by analysis region, IMCRA bioregion and marine protected area, and `A06-region-stats-tables.py` to generate the report tables from the regional statistics.
 
 ## v1-1 - Permanent ReefIDs
 This version focused on assigning permanent unique identifiers to each mapped feature. To ensure IDs were not assigned to false reefs we cleaned up small sliver features created due to the land clipping. This version added the `11-allocate-ReefIDs.py` to manage the ID allocation, and reallocation for new versions of the dataset, copying over previously allocated IDs and assigning new ones as needed.
@@ -69,7 +71,7 @@ cd AU_NESP-MaC-3-17_AIMS_NW-Aus-Features
     ```
 
 ## 4. Download all the input and output data
-Run the following scripts to download all the input and output files associated with the version specified in the `config.ini`:
+Run the following script to download the project files for the version specified in `config.ini` and the configured third-party sources (some optional large bathymetry downloads are disabled in the script):
 
 ```bash
 python 01a-download-input-data.py
@@ -100,23 +102,32 @@ python 11-allocate-ReefIDs.py
 python 12-expand-attribs.py
 python 13-make-RB_Type_L2.py
 ```
-This will trim the `Reef-Boundaries_{version}_edit` polygons against the coastline (`data/{version}/in-3p/AU_AIMS_Coastline_50k_2024.Split.AU_NESP-MaC-3-17_AIMS_Aus-Coastline-50k_2024_V1-1_split.shp`), allocate permanent ReefIDs to each reef, use the `data/{version}/in/RB_Type_L3_crosswalk.csv` to expand the classification attributes to include the Natural Values Common Language and the Seamap Australia classifications, and generate a version with simplified classification. This saves the output shapefile to the `data/{version}/out/` folder.
+This clips the edit polygons against the coastline in `data/{version}/in-3p/AU_AIMS_Coastline_50k_2024/Split/`, carries forward or allocates ReefIDs, uses `data/{version}/in/RB_Type_L3_crosswalk.csv` to add external classifications, and dissolves L3 features to L2 extents. The published shapefiles are saved under `data/{version}/out/full-classes/` (L3) and `data/{version}/out/simp-classes/` (L2).
 
 ## 7. Analysis
-You can then run the analysis scripts:
-- `A02-unmapped-reefs.py`: determine an estimate of countable reefs and reef area, along with how many are previously unmapped.
-- `A02b-tier1-overlap-analysis.py`: determine the percentage of previously mapped reefs contributed by each existing reef mapping data source.
-- `A03-version-changes.py`: determine how this version is different to the previous version. For this to work you will need to have a copy of the previous version of the dataset.
+After producing the L3 and L2 shapefiles, run the analyses needed for the release:
+- `A02-unmapped-reefs.py`: first run with `--prepare`, review and tag the templates in QGIS, then run without the flag to estimate how many countable reefs were previously unmapped. Some third-party inputs are currently read from `data/v1-0/in-3p/` regardless of the configured version; keep those files available. See `A02-unmapped-reefs-spec.md`.
+- `A02b-tier1-overlap-analysis.py`: assess the contribution of each automated and manually tagged reference source to the previously known reefs; requires the A02 analysis output.
+- `A03-version-changes.py`: compare this version with the previous version's edit shapefile by default, or use `--processed` to compare published L3 outputs. Requires both versions' files. See `A03-version-changes-spec.md`.
+- `A04-reef-progression.py`: compare reef counts and areas across versions, using a common classification, study region and countable-reef method. Saves tables and figures in `working/{version}/A04/`.
+- `A05-reef-distribution.py`: count countable coral and rocky reefs and their areas by Analysis-region, IMCRA meso-scale bioregion and CAPAD 2024 marine protected area. Saves a CSV and regional shapefiles in `data/{version}/out/stats/`, and conservation checks in `working/{version}/A05/region-stats-checks.csv`. See `A05-reef-distribution-spec.md`.
+- `A06-region-stats-tables.py`: after A05, generate the L3 feature stocktake, countable-reef, regional and protected-area Markdown report tables in `data/{version}/out/stats/`.
+
+### Interpreting the outputs
+L3 shapefiles contain individually mapped feature polygons; the L2 shapefile dissolves touching L3 parts of the same broader reef class into whole-reef extents. The analyses use *countable reefs*: nearby L2 coral or rocky reefs are clustered by type, then clusters with an effective width below 100 m are excluded. Feature counts, L2 polygon counts and countable-reef counts are therefore different measures. A05 assigns counts to regions while splitting reef area across boundaries. CAPAD protected areas can overlap, so counts and areas summed across individual protected areas can include the same reef more than once; inspect the conservation checks when using these results.
+
+### v1-2 processing and QA
+For v1-2, set `version = v1-2` and `previous_version = v1-1` in `config.ini`, and check that the current and previous edit, L3 and L2 paths point to the intended files. After QGIS edits, run scripts 10-13 in the order shown above (do not use `--fresh` for v1-2). Review the land-split and ReefID poor-match layers described in [ReefID Workflow](#reefid-workflow), correct unexpected cases in the edit layer and rebuild the outputs. Run A05 and review `working/v1-2/A05/region-stats-checks.csv` for failures or unexpected CAPAD overlap counts before using A06 to prepare report tables. A05 writes warnings for failed conservation checks but does not stop automatically.
 
 If you are making a new version of the dataset then you should start with the previous 'edit' version, not the final processed version. 
 
 ### v0-4 processing notes
-For v0-4 we needed to adjust the classification so `09-v0-4-class-cross-walk.py` was used to read `working/02/Reef_Boundaries_Clean.shp`, the previous editable version of the dataset. `v0-3` release didn't have an editable version because it focused on merging datasets together. This script created and saved the conversion to `working/09/Reef-Boundaries_v0-4.shp`, which was manually copied to `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp`. This manual copy was done to prevent an accidental overwrite of any manual edits if the script was run once again. `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp` was then manually edited in QGIS to fix issues in the previous version. This shapefile is the current editable version. The final data file `data/v0-4/out/NW-Aus-Features_v0-4.shp` is derived from the edit version, by running `10-v0-4-clip-land.py`.
+Historical workflow (not the v1-2 run order): `09-v0-4-class-cross-walk.py` read `working/02/Reef_Boundaries_Clean.shp`, the previous editable dataset. The v0-3 release did not have an editable version because it focused on merging datasets. Script 09 saved `working/09/Reef-Boundaries_v0-4.shp`, which was manually copied to `data/v0-4/in/Reef-Boundaries_v0-4_edit.shp` to protect subsequent QGIS edits from accidental overwrite. The v0-4 final data was derived from that edit version using the then-current land-clipping step.
 
 ### v1-0 processing notes
-We started with copying over the `data/v0-4/` to `data/v1-0`. We updated the paths in the QGIS files to fix path dependencies. See section 'Notes on making a new version of this dataset' for more details on setting up a new version. We then made edits to the `Reef-Boundaries_v1-0_edit.shp` dataset, recording progress in the `CHANGELOG.md`. The final output products were made using `10-clip-land.py`, `11-expand-attribs.py` and `12-make-RB_Type_L2.py`. Analysis of the changes was done using `A02-unmapped-reefs.py`, `A02b-tier1-overlap-analysis.py` and `A03-version-changes.py`. 
+Historical workflow (script numbers changed when ReefID allocation was introduced): we copied `data/v0-4/` to `data/v1-0`, updated the QGIS paths and edited `Reef-Boundaries_v1-0_edit.shp`, recording progress in `CHANGELOG.md`. At that time, the final products were made using scripts 10 (land clipping), 11 (attribute expansion) and 12 (L2 dissolution). Analysis of changes used A02, A02b and A03.
 
-If you were to start fresh from this version then you would download the repo, run 01a, 01b, 01c, then remake the outputs by running scripts 10, 11, and 12. Scripts 02, 03, 04, 05, 06, 07, 08, and 09 are only relevant to earlier versions of the dataset and are provided as documentation of the history of the processing.
+Scripts 02-09 document earlier processing stages and are not part of the current v1-2 output sequence.
 
 ### v1-1 processing notes
 In preparation for the allocation of permanent identifiers we added the detection in `10-clip-land.py` to identify any of the editing polygons are split into multiple parts during the clipping. This was to ensure that small false reefs near the coastline were not allocated identifiers. Each of the splits were manually reviewed and resolved, except for a very small number of cases. The ID allocation is performed by `11-allocate-ReefIDs.py`. The ID allocation scheme must maintain permanent IDs and so the scripts copy over IDs from previous versions. Since this is the first version to have identifiers we run:
@@ -190,13 +201,18 @@ In my case I needed to delete `C:\Users\elawrey\Anaconda3\envs\nw-aus-feat-env`
 
 # Description of scripts
 
+Scripts with a version in their filename, such as `02-v0-3-clean-overlaps.py`, were developed for that specific dataset version. They typically transformed data from the previous version to prepare the next version. They are retained to document the provenance of processing from the earliest versions through to the latest dataset, not as steps to rerun for v1-2. Scripts without a version in their filename apply to v1-0 and later versions.
+
 - **`01a-download-input-data.py`**
 This script downloads all the data needed to work on this project (except for the satellite imagery). This includes custom input data and third party datasets used in the publication maps and analysis scripts. This script downloads the data directly from the original source data services. It stores all the data in `data/{version}`, based on the version specified in `config.ini`. 
 
 - **`01b-download-sentinel2.py`**
 Downloads Sentinel-2 satellite imagery composites (15th percentile and low tide imagery) for northern Australia and the Great Barrier Reef.
 
-- **`02-clean-overlaps.py`**
+- **`01c-create-virtual-rasters.py`**
+Creates GDAL virtual rasters for folders of downloaded Sentinel-2 imagery; requires `gdalbuildvrt` on the PATH.
+
+- **`02-v0-3-clean-overlaps.py`**
 Removes overlaps between different reef types according to specific hierarchy rules, particularly focusing on High Intertidal Coral Reef features.
 
 - **`03-v0-3-class-cross-walk.py`**
@@ -227,10 +243,10 @@ This script clips the Reef_boundaries_{current version}_edit to the coastline. A
 Assigns permanent, globally unique ReefIDs to reef features after land clipping. IDs are allocated at the L2 reef level (the whole geological structure) with alphabetic sub-feature suffixes for multi-component reefs. IDs persist across dataset versions via spatial matching against the previous version. Use `--fresh` for first-time allocation.
 
 - **`12-expand-attribs.py`**
-Adds external classification scheme fields (e.g. NVCL, Seamap, Wetlands) to the edited features via a crosswalk and recalculates area and EdgeAcc_m types, outputting a harmonised publication-ready shapefile. This script creates the final output dataset `full-classes/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L3_v1-0.shp`.
+Reads the ReefID-assigned output of script 11, adds external classification scheme fields (e.g. NVCL, Seamap, Wetlands) using the crosswalk, and recalculates area and EdgeAcc_m types. Writes `data/{version}/out/full-classes/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L3_{version}.shp`; unmatched classes are written to a QA layer and stop processing.
 
 - **`13-make-RB_Type_L2.py`**
-Dissolves full RB_TYPE_L3 classified version of the dataset features to RB_Type_L2 extents, aggregating L3 attributes and deriving representative Attachment, DepthCat, confidence, and edge accuracy metrics per dissolved reef polygon. Includes the base ReefID (without sub-feature letter) for each dissolved reef. This dataset is useful for counting reefs, or understanding the full extent of reefs as 'Coral Reef Flats' are dissolved with touching 'Coral Reefs'. This script creates the final output dataset `simp-classes/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L2_v1-0.shp`
+Dissolves the published L3 features into RB_Type_L2 extents, aggregating attributes and retaining the base ReefID for each dissolved reef. This shows the full extent of coral reefs, including touching reef-flat parts. Writes `data/{version}/out/simp-classes/AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L2_{version}.shp` and a QA layer for mixed Attachment values.
 
 - **`V01-v0-4-generate-validation-locations.py`**
 Validation: Generates stratified multi-batch validation datasets (centroids, simplified extents, boundary-error points, plus fake locations) for multiple validators across 12 regions.
@@ -250,32 +266,40 @@ Validation: Aggregates sampled match-line distances per reef to derive full boun
 - **`V04c-v0-4-test-monte-carlo-boundary.py`**
 Validation: Generates simulated (dithered) reef boundaries via stochastic buffering using EdgeAcc_m-derived log-normal ratios to test Monte Carlo boundary uncertainty modelling.
 
-- **`A01-uncharted-reefs-analysis.py`**
-Analysis: Identifies coral and rocky reef features within AHO uncharted areas that are not present in AHO reef or ReefKIM datasets to flag potentially uncharted reefs. This analysis is currently limited to the Gulf of Carpentaria.
-
 - **`A02-unmapped-reefs.py`**
-This script determines which reef features in the North and West Australian Tropical Reef Features dataset were previously mapped by existing spatial datasets, and which are newly mapped. 
+Builds countable-reef clusters and determines which were previously mapped by reference datasets. Run with `--prepare` to create manual tagging templates, review them in QGIS, then run without the flag for the annotated analysis and Markdown summary.
 
 - **`A02b-tier1-overlap-analysis.py`**
 This script apportions the contribution each reference dataset (Tier 1 automated and Tier 2 manual) makes to the total number of reefs that were previously known.
 
 - **`A03-version-changes.py`**
-This script compares the current version with the previous version to generate statistics about what has changed. This is to help create a detailed change description for the dataset metadata. 
+Compares the current and previous edit shapefiles by default, or their processed L3 shapefiles with `--processed`. Writes a Markdown change report for dataset metadata and a verification shapefile.
 
-- **`20d-compare-reef-masks.py` - Unused**
-Compares manual and automated reef masks to evaluate true positives, false positives, and false negatives.
+- **`A04-reef-progression.py`**
+Compares reef counts and areas across mapping versions, producing progression tables and figures using a common region, classification and countable-reef method.
+
+- **`A05-reef-distribution.py`**
+Counts countable coral and rocky reefs and their areas by analysis region, IMCRA bioregion and CAPAD 2024 marine protected area. Writes regional summaries, map layers and conservation checks.
+
+- **`A06-region-stats-tables.py`**
+Generates Markdown report tables for mapped L3 features, countable reefs, regional distributions and protected areas from the L3 dataset and A05 results.
 
 ## Notes on making a new version of this dataset
 From time to time this dataset will be improved, making a new version of the dataset. The following are notes on what is needed to be set up when making a new version. Note: This list is not exhaustive and was written mid-way through the development of v1-0 and so is not tested end-to-end.
 1. Make sure that you have downloaded `data/{current version}` by running `01a-download-input-data.py`. 
 2. Make sure there is a release and tag in GitHub for the current version before you start modifying the code. We might have forgotten to set this up during the previous publication.
-3. Copy `data/{current version}` to `data/{new version}`. 
-4. Update the version number in `data/in/Reef-Boundaries_{version}_edit.shp`. This will now be the file that we edit to make the new version of the dataset.
-5. Rename `data/{new version}/*-{current version}.qgz` to have the new version number. Open each of these in QGIS and update the broken links to the change in the version number. Update the layer names for `Reef boundary Edit {version}` to the new current version.
-6. Edit `config.ini` and change the versions in all the current and previous paths. 
-7. Create a new entry in CHANGELOG.md to record a summary of all the modifications for this version.
-8. Run `10-clip-land.py`, `11-allocate-ReefIDs.py`, `12-expand-attribs.py` and `13-make-RB_Type_L2.py` to determine whether the pipeline works before making changes to the dataset. For the first version with ReefIDs, run `python 11-allocate-ReefIDs.py --fresh`. For subsequent versions, the script matches against the previous version automatically.
-9. Once the new version is complete and rebuilt, publish the new data to nextcloud.eatlas.org.au, add a summary of the changes to the changelog of the dataset metadata, update the version number in the citation text, update the DOI version number, publish the new version to eAtlas GeoServer.
+3. Edit `config.ini` and change the versions in all the current and previous paths.
+4. Copy `data/{current version}` to `data/{new version}`.
+5. Set up the `in-3p` data. If using symbolic links, move any real dataset folders in the new version's `in-3p` to the shared directory first (checking for existing copies), then run `U01-setup-symbolic-links.bat {new version}` from an administrator Command Prompt. The batch file does not replace existing folders. Activate the Conda environment and run the download for any other required files.
+```bash
+conda activate nw-aus-feat-env
+python 01a-download-input-data.py
+```
+6. Rename the copied edit shapefile to `data/{new version}/in/Reef-Boundaries_{new version}_edit.shp`. This is the file to edit for the new version.
+7. Rename `data/{new version}/*-{current version}.qgz` to have the new version number. Open each of these in QGIS and update the broken links to the change in the version number. Update the layer names for `Reef boundary Edit {version}` to the new current version.
+8. Create a new entry in CHANGELOG.md to record a summary of all the modifications for this version.
+9. Run `10-clip-land.py`, `11-allocate-ReefIDs.py`, `12-expand-attribs.py` and `13-make-RB_Type_L2.py` to check the pipeline before making changes to the dataset. Use `python 11-allocate-ReefIDs.py --fresh` only if there is no previous version with ReefIDs; otherwise the script matches against the previous version.
+10. Once the new version is complete and rebuilt, publish the new data to nextcloud.eatlas.org.au, add a summary of the changes to the changelog of the dataset metadata, update the version number in the citation text, update the DOI version number, publish the new version to eAtlas GeoServer.
 
 ### Errors and problems
 The following errors and problems can occur when making a new version of the dataset.
@@ -302,118 +326,7 @@ ReefIDs are permanent identifiers for reefs, serving as placeholder names for th
 
 **First-time allocation:** Run `python 11-allocate-ReefIDs.py --fresh` when no previous version with ReefIDs exists.
 
-## Validation sampling
 
-This analysis was performed on the v0-4 dataset and is planned to be completed as part of the final dataset validation in v1-1. No additional work was done on this in v1-0.
-
-To provide a basic level of validation to the dataset we perform an expert review of a random sample of reef features, looking to answer the following key questions:
-1. Does the indicated feature exist? i.e. it is a reef or sand bank
-2. Is the classification accurate?
-3. Are there other errors associated with the feature such as boundary accuracy or other attributes?
-The goal of this validation is to assess the number of false positives that are likely in the dataset. False positives are problematic as they could lead to proponents being sent to investigate non-existent features, leading to wasted time and money.
-
-A significant challenge in validating the dataset is the small size of reefs relative to open water. Simply uninformed random sampling will result in over 99% samples of open water as the reef areas only represent 1.2% of the study area.
-
-We instead assess the accuracy of mapped reefs by randomly selecting a number of reefs to perform a detailed review by two reef mapping experts. This ensures that the focus is on the small areas represented by the reefs. This approach does not assess the false negative rate, i.e. features that are not mapped. 
-
-The density of reef features is not uniform along the coastline, with the Kimberley containing a much higher density of features per unit area. To ensure that each region receives sufficient features to review the study area was broken into 12 regions, each corresponding to segments of 350 - 600 km of coastline. Where possible the boundaries were chosen to closely align with existing named regions and with the natural boundaries of systems. All offshore reefs were clustered into a single group due to the low number of offshore features.
-
-A Python script was used to randomly choose an equal number of features from each region. These were organised into batches of 10 features per region per batch. This allowed the team to work progressively, with each batch covering the full study area. 
-
-
-Each feature to be reviewed is referenced by a point that exists close to the centroid of the feature being reviewed. The point is guaranteed to be inside the polygon. Each reviewer assigns the usual feature classifications, along with an indication of whether the feature is a false positive. This assignment of classifications is performed blind, without review of the existing assigned values. This allows a less biased assessment. 
-1. Is there a feature of significance at the location indicated by the polygon (rocky reef, coral reef, sand bank)? (FeatExists)
-2. What is an appropriate level of confidence in the feature existence (TypeConf)
-3. What is the classification of the feature, without knowing what the original classification? (RB_Type_L3)
-4. What is an appropriate level of uncertainty in the classification? (FeatConf)
-5. Is the feature fringing, isolated or on an atoll (off the continental shelf), (Attachment)
-
-This script generates locations for validation of the reef features in this dataset.
-This is done by dividing the study area into 12 regions as specified by the 
-data/v0-4/in/NW-Aus-Features-validation-regions.shp file. Each of the reef features,
-as specified in data/v0-4/out/NW-Aus-Features_v0-4.shp, is then assigned to one of these
-regions based on the centroid of the feature's geometry. 
-
-The goal is to create a validation dataset that can be reused and applied to updated
-versions of the reef features dataset, without needing to reevaluate the mapped features.
-The evaluation can be performed automatically by a validation script by comparing the
-validation attributes with the mapped features, and comparing the distance between 
-the mapped feature and the boundary validation point.
-
-To facilitate the automated validation the validation needs to be divided into three parts:
-1. Feature-centroid: A feature centroid point that represents the feature and its attributes. 
-This can be linked back to the mapped feature using a spatial join. This point must be 
-central and inside the feature polygon to ensure this spatial join works correctly.
-2. Polygon-extent: A simplified polygon that represents the extent of the feature. This 
-polygon aims to assist the validator in understanding the extent of the feature without 
-biasing them to the exact geometry of the feature. The geometry vertices should be randomly 
-fuzzed by approximately 50 m and simplified to an approximately 50 m allowable error.
-3. Boundary-error: One or more points that lie on a random point of the boundary of the feature polygon.
-These points will be repositioned by the validator to lie on the closest best estimate of the 
-true boundary of the feature. To reduce bias, these points should be randomly
-chosen from the simplified version of the polygon. These points can lie on the lines
-between vertices of the simplified polygon, or the vertices themselves.
-
-The Feature-centroid, Polygon-extent and Boundary-error should be cross linked by a unique ID.
-
-The Feature-centroid should have the following attributes:
-- ValidID (Integer): Unique identifier for the validation feature. Used to cross-link between the
-    centroid, extent and boundary-error features.
-- FeatExists (String, values: 'True','False') 
-    Is there a feature of significance at the location indicated by the polygon 
-    (rocky reef, coral reef, sand bank)?
-- TypeConf (String, values: 'High','Medium','Low','Very Low'): 
-    What is an appropriate level of confidence in the feature existence (TypeConf)
-- RB_Type_L3 (String, values: 
-    Coral Reef
-    Deep Bank Coral Reef
-    Coral Reef Inner Flat
-    High Intertidal Coral Reef
-    High Intertidal Sediment Reef
-    Stromatolite Reef
-    Rocky Reef
-    Sandy Limestone Pavement
-    Limestone Reef
-    Low Relief Rocky Reef
-    Paleo Coast Rocky Reef
-    Intertidal Sediment
-    Sand Bank
-    Atoll Lagoon Patch Coral Reef
-    Atoll Lagoon Coral Reef
-    Atoll Rim Coral Reef
-    Atoll Flow Coral Reef
-    Atoll Platform Coral Reef
-    Vegetated Cay
-    Unvegetated Cay
-    Island
-    Mainland
-    Seagrass on Coral Reef
-    Seagrass on Sediment
-    Oceanic vegetated sediments
-    Atoll Platform
-    Man Made
-    Unknown)
-    What is the classification of the feature, without knowing what the original classification?
-- FeatConf (String, Values: High, Medium, Low, Very Low):
-    What is an appropriate level of uncertainty in the classification? (FeatConf)
-- Attachment (String, values: 
-    Fringing
-    Isolated
-    Atoll)
-Is the feature fringing, isolated or on an atoll (off the continental shelf), (Attachment)
-
-The Polygon-extent should have the following attributes:
-- ValidID (Integer): Cross-link back to the matching Feature-centroid.
-
-The Boundary-error should have the following attributes:
-- ValidID (Integer): Cross-link back to the matching Feature-centroid.
-
-The script should save the generated validation shapefiles to
-working/20/NW-Aus-Features-v0-4_Feature-centroid-{zero padded Batch number}.shp
-working/20/NW-Aus-Features-v0-4_Polygon-extent-{zero padded Batch number}.shp
-working/20/NW-Aus-Features-v0-4_Boundary-error-{zero padded Batch number}.shp
-
-The script should generate 10 batches of validation data, each containing 10 features per region.
 
 
 # References:

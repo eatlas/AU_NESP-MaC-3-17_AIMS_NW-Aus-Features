@@ -1,6 +1,22 @@
 # Map stage notes
 The following is a set of notes detailing the processing that was applied in the development of each phase of the mapping. This phased approach provides a record of what features were detected and mapped at each stage of the project, where each stage represents the incorporation of new information. These are unstructured, unpolished notes. The time estimates are a record of time spent on the digitisation of the dataset, along with the number of features contained in the dataset.
 
+# Analysis
+2026-09-29:
+As part of analysing the progress in the feature count across versions of the dataset (A04) we found that v0.3 has a few adjustments that are needed to make it align with the other versions. This includes removing the shallow sediment that was added to make the masking for the habitat mapping. In addition to this we find that the Atoll Platforms class in the crosswalk maps through to Sediment. This is not wrong, particularly for the Coral Sea mapping, however when converting to L2 classification the these reefs are no longer classified as reefs. In later versions of the dataset these features are classified as Coral Reef Bank with an attachment that is Oceanic. These get mapped through to 'Coral Reef' at the L2 classification. To make v0.3 somewhat compatible we need to move the Atoll Platform classification to map through to the 'Coral Reef Bank'. This means that this crosswalk table might not suitable for use in the Coral Sea reef mapping.
+
+When looking at the progression of the number and area of mapped coral reef and rocky reefs we found that with the existing crosswalk that there was a large change in area associated with the transition from v0.3 to v0.4. This was due to reefs associated with Barrow Island and Montobello Islands. In this region there are very large flats that are shallow sandy flats over a limestone base. In v0.3 they were classified as Fringing and Platform Shallow Reef Flat. This was acknowledgment that these features were different to the normal coral reefs. It was not known at the time what the structure of the features were. In the crosswalk these were mapped through as coral reefs, which was switch to rocky reefs in later stages because limestone is more of a rock than a coral reef. To resolve this we adjusted the crosswalk to more align with the later classification. 
+
+2026-10-03: v1-2
+Digitisation focusing on improving the separation of rocky reef, coral reef and coral reef flat in the northern Kimberley. In this region there are a lot of fringing reefs that have grown out from the islands and mainland. It also has many small rocky islands and rocky reefs scattered throughout the fringing reefs and near the shore. The focus of this digitisation was to improve the coverage of the coral reef flat regions in this region, but we found that there were a lot of small rocky features that were not separated or included. When we started digitising the reefs we would normally have the view in QGIS at a scale of 1:25000. As we spent more time on quality control adjustments were done at finer and finer scales. For most of the editing in v1-2 the view during digitisation was at 1:2500 to 1:5000. At this scale the satellite imagery pixels are about 1 - 2 mm across. The resulting digitisation results in near pixel perfect maps at a scale of about 1:50k. There are still many more fine scale adjustments to be done to the dataset if we were to fully incorporate all the information available in the imagery. 
+- Time: 3 hours 4 min 11789 features 
+
+# Stage 7 - v1-2
+2026-05-31:
+The Reef Map Guide is driven by features mapped in the Australian Tropical Reef Features dataset, which is made up from the North and West Australian Features dataset. Any errors in these dataset will propagate through to the tutorials and test. As we were testing each tutorials where we noticed an omission or error we started correcting them in the source dataset.
+We added sand banks near Dampier archipelago and rocky reefs along parts of the northern Kimberly.
+- Time 70 min 11636 features
+
 # Stage 6 - v1-1
 2026-05-17:
 With the clean up of the splitting of features by the land clipping resolved the next challenge is the allocation of permanent identifiers to the features. For this we used `11-allocate-ReefIDs.py`. On reviewing the initial allocation we noticed several problems. 
@@ -17,7 +33,7 @@ Test case 4 failed. In this case both the new neighbouring feature and the origi
 
 Test case 1 also had a problem. The larger part of the original sub reef (R-8643-242a) retained the ReefID (R-8643-242a). The smaller portion was allocated a new subpart ID, R-8643-242d. However, no `PrevReefID` was recorded for the smaller split part (R-8643-242d), even though its full surface was previously known as R-8643-242a. The idea of saving the PrevReefID is to allow us to understand where a region was previously known by a different name (ReefID). I don't think this scenario was fully considered in the original coding.
 
-- Time: 1 hour - Checking and correcting ID issues.
+- Time: 3 hour - Checking and correcting ID issues.
 
 2026-05-16:
 Continuing to fix up reef boundary issues that are leading to feature splits after land clipping. I think that the majority of the problems are in the Kimberley where the outer reef boundaries were digitised, then high intertidal reefs were digitised as a cut out. On the land side of these cutouts they approximately matched the coastline, but were not always on the inside of the coastline. After the land clipping any bay would be considered as a small coral reef. The cause of these problems is that the land area was not clipped out as holes from the reef boundary. On the landward side the fringing high intertidal should transition to nothing, not a reef feature from the other side of the island.
@@ -321,11 +337,14 @@ The RB_Type_L3 classification divides many reefs into an active growing region (
 
 
 No rigorous time tracking was applied to the improvements being made, however the following are approximate total digitisation time:
-v0-1 RB - 500 hours
+v0-1 RB - 450 hours
 v0-1 EL - 87 hours
-v0-2 - (v0-1 RB +50 hours) 550 hours
+v0-2 - (v0-1 RB +50 hours RB +50 hours for EL contribution) 550 hours
 v0-3 - (v0-2 +80 hours) 630 hours
 v0-4 - (v0-3 +77 hours) 707 hours (up to 29/7/2025) 13,795 kB 10390 features 7624 depths 2896 rocky reefs
+v1-0 - (v0-4 +53.5 hours) 760.5 hours 
+v1-1 - (v1-0 +21.5 hours) 782 hours
+v1-2 - (v1-1 +4.1 hours) 786 hours
 
 
 

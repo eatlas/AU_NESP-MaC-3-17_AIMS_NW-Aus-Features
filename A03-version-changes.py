@@ -2,8 +2,8 @@
 
 Compares two versions of the NW Australian reef boundary dataset to quantify
 changes: new features added, features deleted, boundary improvements, and
-attribute updates. Outputs a descriptive console report and a verification
-shapefile.
+attribute updates. Outputs a Markdown report to stdout and a file, plus a
+verification shapefile.
 
 Two input modes:
   Default      : Compares raw edit shapefiles.
@@ -60,6 +60,7 @@ else:
 
 OUT_DIR = f"working/{version}/A03"
 OUT_SHP = os.path.join(OUT_DIR, f"Version-changes_{version}.shp")
+REPORT_PATH = os.path.join("data", version, "out", "stats", "A03-version-changes.md")
 
 # ── Step 1: Load datasets ─────────────────────────────────────────────────────
 missing = []
@@ -314,46 +315,47 @@ os.makedirs(OUT_DIR, exist_ok=True)
 out_gdf.to_file(OUT_SHP)
 print(f"  Saved to: {OUT_SHP}")
 
-# ── Step 7: Console report ────────────────────────────────────────────────────
+# ── Step 7: Markdown report ───────────────────────────────────────────────────
 attr_list = ", ".join(COMPARE_ATTRS)
 
-report = f"""
-=============================================================
-Version Change Report: {previous_version} \u2192 {version}
-=============================================================
-Input: {input_desc}
-  Previous: {old_path}
-  Current:  {new_path}
-Previous version features: {n_old}
-Current version features:  {n_new}
+report = f"""# Version Change Report: {previous_version} \u2192 {version}
 
---- Feature Matching ---
-Features with identical geometry found in both versions
-(indicating no change to the feature boundary):
-  Unchanged features: {n_unchanged}
+**Input:** {input_desc}
 
-Features where the geometry overlaps between versions but is not
-identical (indicating an improvement to the boundary):
-  Improved features: {n_improved}
-    IoU-matched (>= {IOU_THRESHOLD}): {n_iou_improved}
-    Overlap-only:                     {n_overlap_improved}
+- Previous: `{old_path}` ({n_old} features)
+- Current: `{new_path}` ({n_new} features)
 
-Features present in the current version with no spatial overlap
-with any feature in the previous version (indicating a newly
-digitised feature):
-  New features: {n_new_features}
+## Feature Matching
 
-Features present in the previous version with no spatial overlap
-with any feature in the current version (indicating a removed
-feature):
-  Deleted features: {n_deleted}
+Features with identical geometry in both versions (no boundary change):
 
---- Attribute Changes ---
-Among features with a 1:1 match (unchanged + IoU-matched improved),
-the number where one or more attributes ({attr_list}) were updated:
-  Features with attribute changes: {n_attr_changed} / {n_attr_compared}
+- Unchanged features: {n_unchanged}
 
-Verification shapefile saved to: {OUT_SHP}
-============================================================="""
+Features with overlapping but non-identical geometry (boundary improvement):
 
-print(report)
+- Improved features: {n_improved}
+    - IoU-matched (>= {IOU_THRESHOLD}): {n_iou_improved}
+    - Overlap-only: {n_overlap_improved}
+
+Current-version features with no spatial overlap with the previous version:
+
+- New features: {n_new_features}
+
+Previous-version features with no spatial overlap with the current version:
+
+- Deleted features: {n_deleted}
+
+## Attribute Changes
+
+Among 1:1 matches (unchanged and IoU-matched improved), features with changes
+to one or more attributes ({attr_list}):
+
+- Features with attribute changes: {n_attr_changed} / {n_attr_compared}
+
+Verification shapefile: `{OUT_SHP}`
+"""
+
+os.makedirs(os.path.dirname(REPORT_PATH), exist_ok=True)
+with open(REPORT_PATH, "w", encoding="utf-8") as report_file:
+        report_file.write(report)
+print(report, end="")
