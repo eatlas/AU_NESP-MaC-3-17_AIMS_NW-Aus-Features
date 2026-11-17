@@ -286,6 +286,15 @@ Counts countable coral and rocky reefs and their areas by analysis region, IMCRA
 - **`A06-region-stats-tables.py`**
 Generates Markdown report tables for mapped L3 features, countable reefs, regional distributions and protected areas from the L3 dataset and A05 results.
 
+- **`A07-coral-area-comparison.py`**
+Compares the area of all L3 Coral Reef polygons with UQ Coral/Algae benthic habitat area across six analysis subregions. Uses the published habitat statistics CSV downloaded by `01a-download-input-data.py`, not A05 countable reefs. Writes CSV and Markdown comparison tables in `data/{version}/out/stats/`.
+
+- **`A07b-habitat-boundary-reconciliation.py`**
+Reconciles Coral Reef and Rocky Reef boundary area with UQ Rock, Rubble and Coral/Algae benthic habitat area across the same six subregions. Rasterises the L3 boundaries onto the 10 m habitat grid and measures ellipsoidal pixel areas. Requires the benthic GeoTIFF and habitat statistics CSV downloaded by `01a-download-input-data.py`. Caches the overlay in `working/{version}/A07b/` and writes a CSV and Markdown tables in `data/{version}/out/stats/`.
+
+- **`A08-attribute-summary.py`**
+Summarises DepthCat, FeatConf and TypeConf across all published L3 features, without regional filtering or area weighting. Writes category counts and percentages to a CSV and three Markdown report tables in `data/{version}/out/stats/`. These describe recorded attributes, not independently validated accuracy or regional depth distributions.
+
 ## Notes on making a new version of this dataset
 From time to time this dataset will be improved, making a new version of the dataset. The following are notes on what is needed to be set up when making a new version. Note: This list is not exhaustive and was written mid-way through the development of v1-0 and so is not tested end-to-end.
 1. Make sure that you have downloaded `data/{current version}` by running `01a-download-input-data.py`. 
