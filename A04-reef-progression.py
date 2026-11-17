@@ -33,7 +33,7 @@ Normalisation pipeline (applied to every version so versions are comparable):
 7. Cluster: dissolve touching features of the same RB_Type_L2 into single
    "fused" reefs using dissolve_to_l2_components() from reef_utils.py (the
    same logic as 13-make-RB_Type_L2.py).
-8. Compute area (EPSG:3112) and effective width (diameter of a circle with
+8. Compute area (EPSG:3577) and effective width (diameter of a circle with
    the same area).
 
 Countable reef pipeline (applied after step 8, before size classification):
@@ -138,7 +138,7 @@ CACHE_DIR = os.path.join(OUTPUT_DIR, "cache")
 
 # ---- ANALYSIS CONSTANTS ----
 PROCESS_CRS = 4326   # geometry processing CRS (clipping needs geographic coords)
-AREA_CRS = 3112      # MGRUP, for area calculations
+AREA_CRS = 3577      # Australian Albers (equal-area), for area calculations
 MIN_EFF_WIDTH_M = 30.0
 KEEP_L2 = ["Coral Reef", "Rocky Reef"]
 

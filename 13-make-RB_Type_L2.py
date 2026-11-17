@@ -39,7 +39,7 @@ Processing overview
        • FeatConf and TypeConf: take the lowest confidence across members (Very Low < Low < Medium < High).
        • EdgeAcc_m: take the maximum (worst) accuracy in metres.
    - Flag components where multiple Attachment values were merged (AttSet contains ';').
-6) Area: compute Area_km2 in EPSG:3112, round to 4 decimal places; keep output CRS unchanged (EPSG:4283).
+6) Area: compute Area_km2 in EPSG:3577 (equal-area), round to 4 decimal places; keep output CRS unchanged (EPSG:4283).
 7) Outputs:
    - Main dissolved singlepart features: AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L2_{version}.shp
      Fields include RB_Type_L2, RB_L3_Agg, Attachment, DepthCat, DepthCatSr, FeatConf, TypeConf,
@@ -244,9 +244,9 @@ def main():
     # Flag multi-attachment merged features (for QA output)
     singleparts["HasMultiAtt"] = singleparts["AttSet"].str.contains(";")
 
-    # Compute area in EPSG:3112, keep geometry CRS unchanged
-    print("Computing area (EPSG:3112)...")
-    sp_proj = singleparts.to_crs(epsg=3112)
+    # Compute area in EPSG:3577, keep geometry CRS unchanged
+    print("Computing area (EPSG:3577)...")
+    sp_proj = singleparts.to_crs(epsg=3577)
     singleparts["Area_km2"] = (sp_proj.geometry.area / 1e6).round(4)
 
     # Output dir

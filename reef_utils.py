@@ -33,6 +33,18 @@ from shapely.ops import unary_union
 SLIVER_EPS = 1e-6
 
 
+def repair_slivers(geom):
+    """Close seams with buffer(+eps).buffer(-eps), keeping geom if the repair changes its area.
+
+    GEOS can return an empty result for valid polygons with such tiny buffers,
+    for example in EPSG:3112 where coordinates are ~1e6 m.
+    """
+    repaired = geom.buffer(SLIVER_EPS).buffer(-SLIVER_EPS)
+    if repaired.is_empty or abs(repaired.area - geom.area) > 1e-6 * geom.area:
+        return geom
+    return repaired
+
+
 def strip_reef_suffix(reef_id):
     """Strip trailing lowercase letter suffix from a ReefID to get the base form.
 
@@ -81,7 +93,7 @@ def dissolve_to_l2_components(gdf):
         # Union all features of this L2 class
         union_geom = unary_union(class_gdf.geometry)
         # Close floating-point slivers/gaps produced by the dissolve
-        union_geom = union_geom.buffer(SLIVER_EPS).buffer(-SLIVER_EPS)
+        union_geom = repair_slivers(union_geom)
         # Remove redundant micro-vertices introduced by the buffer arcs
         union_geom = union_geom.simplify(SLIVER_EPS, preserve_topology=True)
         # Explode into singlepart components (each = one reef)
@@ -148,7 +160,7 @@ def dissolve_to_l2_components(gdf):
 
 
 def cluster_countable(gdf, buffer_m=50.0, min_width_m=100.0, drop_small=True,
-                      size_classes=None, buffer_crs=3112, show_progress=False):
+                      size_classes=None, buffer_crs=3577, show_progress=False):
     """
     Cluster fused reefs into "countable reefs".
 
@@ -186,7 +198,7 @@ def cluster_countable(gdf, buffer_m=50.0, min_width_m=100.0, drop_small=True,
         exclusive). If None, no size class is calculated.
     buffer_crs : int or pyproj.CRS
         Projected (metre) CRS in which the buffer and union are computed.
-        Defaults to EPSG:3112 (MGRUP, covers Australia). The output is
+        Defaults to EPSG:3577 (Australian Albers, equal-area). The output is
         returned in the input CRS.
     show_progress : bool
         Print per-class clustering milestones and the number of clusters
@@ -273,11 +285,10 @@ def cluster_countable(gdf, buffer_m=50.0, min_width_m=100.0, drop_small=True,
         )
         unassigned = joined[joined['_comp_id'].isna()]
         if not unassigned.empty:
-            un_feats = class_gdf.loc[
+            un_feats = members.loc[
                 unassigned['_member_idx'].tolist(),
                 ['_member_idx', 'geometry'],
             ]
-            un_feats['geometry'] = un_feats.geometry.representative_point()
             fallback = gpd.sjoin(
                 un_feats, comps[['_comp_id', 'geometry']],
                 predicate='intersects', how='left',
@@ -300,10 +311,8 @@ def cluster_countable(gdf, buffer_m=50.0, min_width_m=100.0, drop_small=True,
             member_idx = member_reefs['_member_idx'].tolist()
             geom = unary_union(class_gdf.loc[member_idx, 'geometry'])
             # Sliver repair (same as dissolve_to_l2_components) to clean
-            # internal seams without changing the extent or the area. In a
-            # metre CRS SLIVER_EPS is sub-millimetre, so this is a no-op
-            # that only removes redundant vertices.
-            geom = geom.buffer(SLIVER_EPS).buffer(-SLIVER_EPS)
+            # internal seams without changing the extent or the area.
+            geom = repair_slivers(geom)
             geom = geom.simplify(SLIVER_EPS, preserve_topology=True)
             area_m2 = geom.area
             eff_width = 2.0 * np.sqrt(area_m2 / np.pi)

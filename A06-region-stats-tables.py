@@ -2,7 +2,7 @@
 
 Run A05-reef-distribution.py first. This script reads the A05 region summary
 CSV and cached reef pieces, and the L3 output dataset, and writes
-data/{version}/out/stats/NW-Aus-Features_Report-tables_{version}.md.
+data/{version}/out/stats/A06_Report-tables_{version}.md.
 """
 
 import importlib.util
@@ -18,9 +18,10 @@ a05 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(a05)
 
 VERSION = a05.VERSION
+SCRIPT_NAME = Path(__file__).stem
 L3_DATASET = (a05.DATA_DIR / "out" / "full-classes" /
               f"AU_NESP-MaC-3-17_AIMS_NW-Aus-Features_L3_{VERSION}.shp")
-OUTPUT_MD = a05.OUTPUT_CSV.parent / f"NW-Aus-Features_Report-tables_{VERSION}.md"
+OUTPUT_MD = a05.OUTPUT_CSV.parent / f"A06_Report-tables_{VERSION}.md"
 SETTINGS = {setting["slug"]: setting for setting in a05.REGIONALISATIONS}
 ANALYSIS, IMCRA, CAPAD = SETTINGS["analysis-region"], SETTINGS["imcra"], SETTINGS["capad"]
 NO_MATCH_LABELS = {
@@ -39,7 +40,7 @@ def count(value):
 
 def area(value):
     value = float(value)
-    return "<0.01" if 0 < value < 0.005 else f"{value:,.2f}"
+    return "<0.1" if 0 < value < 0.05 else f"{value:,.1f}"
 
 
 def pipe_table(header, rows, bold_last=False, text_columns=1):
@@ -77,16 +78,40 @@ def l3_table():
 
 
 def summary_table(reefs):
-    """Countable reef totals that every regional table reconciles to."""
+    """Countable reefs by geographic group, including whole-reef areas."""
+    au_reefs = australian_reefs(reefs)
+    pieces = a05.read_cached(a05.reef_cache_path(ANALYSIS))
+    timor_ids = set(pieces.loc[(pieces["Assigned"] == 1) & (pieces["Sliver"] == 0) &
+                               pieces["NAME"].eq("Timor East / Indonesia"), "CountFID"])
+    au_ids = set(au_reefs["CountFID"])
+    if au_ids & timor_ids or au_ids | timor_ids != set(reefs["CountFID"]):
+        raise ValueError("Australia and Timor/Indonesia must partition all countable reefs")
+    groups = (("Australian waters (mapped extent)", au_reefs),
+              ("Timor/Indonesia (partial coverage)",
+               reefs[reefs["CountFID"].isin(timor_ids)]))
     rows = []
-    for reef_type, _ in a05.REEF_TYPES:
-        typed = reefs[reefs["RB_Type_L2"] == reef_type]
-        rows.append([reef_type, count(len(typed)), area(typed.geometry.area.sum() / 1e6)])
-    rows.append(["Total", count(len(reefs)), area(reefs.geometry.area.sum() / 1e6)])
+    for label, grouped in groups:
+        for reef_type, _ in a05.REEF_TYPES:
+            typed = grouped[grouped["RB_Type_L2"] == reef_type]
+            rows.append([label, reef_type, count(len(typed)),
+                         f"{typed.geometry.area.sum() / 1e6:,.0f}"])
+        rows.append([f"**{label} total**", "", f"**{count(len(grouped))}**",
+                     f"**{grouped.geometry.area.sum() / 1e6:,.0f}**"])
+    rows.append(["Total", "", count(len(reefs)), f"{reefs.geometry.area.sum() / 1e6:,.0f}"])
     return "\n\n".join([
-        caption("summary", f"Countable coral and rocky reefs in version {VERSION} of the "
-                "dataset."),
-        pipe_table(["Reef type", "Countable reefs", "Area (km²)"], rows, True)])
+        caption("summary", "Number of mapped reefs in the North and West Australian "
+                "Tropical Reef Features dataset. This table lists countable reefs, not "
+                "the number of mapped features. Countable reefs are clusters of features "
+                "that are significantly large and separate that they can be considered as "
+                "distinct (100 m effective width, 100 m separation). Counts cover only the "
+                "study area, not all reefs in Australia or Timor/Indonesia. Australian coverage includes "
+                "the North, North-west and South-west marine regions and their nearshore "
+                "waters, with additional mapped areas at Christmas Island, Cocos "
+                "(Keeling) Islands, Torres Strait (small fraction) and in the Temperate East marine region. "
+                "Coverage of Timor/Indonesia is partial. "
+                f"Data: {VERSION}, script: {SCRIPT_NAME}.py."),
+        pipe_table(["Mapped coverage", "Reef type", "Countable reefs", "Area (km²)"],
+                   rows, True, 2)])
 
 
 def australian_reefs(reefs):
@@ -137,7 +162,7 @@ def protected_table(reefs):
         caption("protected", "Countable reefs in Australian waters inside, near (within "
                 "300 m) and outside protected areas in CAPAD 2024 - Marine. Australian "
                 "waters are all Analysis-regions except Timor East / Indonesia. Areas are "
-                "the reef area falling within each category."),
+                f"the reef area falling within each category. Script: {SCRIPT_NAME}"),
         pipe_table(["Reef type", "Category", "Reefs", "% of reefs", "Area (km²)",
                     "% of area"], rows, text_columns=2)])
     return table, figures
@@ -173,22 +198,23 @@ def main():
     protected, figures = protected_table(reefs)
     sections = [
         f"<!-- Generated by A06-region-stats-tables.py from dataset version {VERSION}. -->",
+        "## Executive summary table", summary_table(reefs),
         "## Results section tables", l3_table(),
-        "## Appendix tables", summary_table(reefs), protected,
+        "## Appendix tables", protected,
         region_table(stats, ANALYSIS, "analysis", "Analysis-region",
                      "Countable reefs and reef area by Analysis-region. Reef counts are "
                      "assigned to a single region. Partial counts are reefs that extend "
-                     "into the region but are counted elsewhere."),
+                     f"into the region but are counted elsewhere. Script: {SCRIPT_NAME}"),
         region_table(stats, IMCRA, "imcra", "IMCRA meso-scale bioregion",
                      "Countable reefs and reef area by IMCRA v4.0 meso-scale bioregion. "
                      "Partial counts are reefs that extend into the region but are counted "
-                     "elsewhere."),
+                     f"elsewhere. Script: {SCRIPT_NAME}"),
         region_table(stats, CAPAD, "capad", "Protected area",
                      "Countable reefs and reef area by protected area in CAPAD 2024 - "
                      "Marine. 'Near:' rows are reefs counted within 300 m outside the "
                      "protected area, listed only where they hold at least one reef count. "
                      "Reefs in overlapping protected areas can be counted in more than one "
-                     "row, so this table has no total."),
+                     f"row, so this table has no total. Script: {SCRIPT_NAME}"),
     ]
     OUTPUT_MD.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_MD.write_text("\n\n".join(sections) + "\n", encoding="utf-8")

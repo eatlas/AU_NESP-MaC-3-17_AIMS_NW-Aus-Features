@@ -56,7 +56,7 @@ version = v1-0
 | Purpose | CRS |
 |---|---|
 | Storage / output | EPSG:4283 (GDA94 geographic) |
-| Buffering, area calculation, clustering | EPSG:3112 (GDA94 / Geoscience Australia Lambert) |
+| Buffering, area calculation, clustering | EPSG:3577 (GDA94 / Australian Albers, equal-area). Other EPSG:3112 references in this spec now mean EPSG:3577. |
 
 
 ## Processing Pipeline

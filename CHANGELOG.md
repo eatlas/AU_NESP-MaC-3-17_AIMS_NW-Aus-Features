@@ -2,6 +2,37 @@
 The following is a set of notes detailing the processing that was applied in the development of each phase of the mapping. This phased approach provides a record of what features were detected and mapped at each stage of the project, where each stage represents the incorporation of new information. These are unstructured, unpolished notes. The time estimates are a record of time spent on the digitisation of the dataset, along with the number of features contained in the dataset.
 
 # Analysis
+
+2026-11-17: v1-2 publication preparation
+Checking an resolving any issues prior to finalisation of v1-2 code. This discovered a rounding bug in A02 that resulted in a reef count difference with A05 of 1. Fixed the bug and made sure these changes were made to the final report.
+
+2026-10-28: v1-2 crosswalk source distinction
+
+Added `CS_RB_Type_L3_v0-3` to `data/v1-2/in/RB_Type_L3_crosswalk.csv` to distinguish the Coral Sea application of scheme v0-3 from the NW dataset's `RB_Type_L3_v0-3`. In the Coral Sea, Atoll Platform excludes separately mapped coral reefs and maps to Sediment at L2. In NW v0-3, it includes sediment and reef hard substrate and maps to Coral Reef Bank under scheme v0-4 and Coral Reef at L2. This resolves the crosswalk limitation noted on 2026-09-29 while retaining the NW mapping. The crosswalk and its columns are now documented in the dataset metadata and input-folder readme.
+
+2026-10-13: v1-2 area projection errata
+
+Areas in the dataset and the analysis scripts were calculated in EPSG:3112 (GDA94 / Geoscience Australia Lambert). This projection is conformal, not equal-area. Its area scale varies with latitude across the study area. Areas were overstated by about 7% near 9°S and understated by about 2% near 28°S. For the six Analysis-regions v1 subregions the error was +3.2% to −2.4%. It was +5.8% for Christmas Island. The total L3 area was overstated by 1.2% (24,024 km² compared with 23,744 km²) and Coral Reef L2 area by 2.2%.
+
+We found the error while reconciling the reef boundary areas with the UQ habitat mapping (A07b). A raster versus polygon difference changed sign with latitude, which pointed to the projection. Since v1-2 had not yet been published, all area calculations now use EPSG:3577 (GDA94 / Australian Albers), which is equal-area. This includes the `Area_km2` attribute written by scripts 12 and 13 and the A02 to A07b analyses. The feature geometry and classifications are unchanged. The outputs calculated with EPSG:3112 were kept as `v1-2-EPSG-3112`.
+
+At the same time we fixed a bug in `repair_slivers` in `reef_utils.py`. The buffer repair could return an empty geometry, which removed 10 coral reefs from the countable reef clustering. The repair now keeps the original geometry when the repair empties it or changes its area.
+
+2026-10-08: v1-2 classification errata
+
+The final published v1-2 dataset retains eight features from preliminary sediment and seagrass mapping. These are not necessarily incorrect representations of their locations, but they are incomplete remnants and must not be interpreted as representative coverage of these classes.
+
+| RB_Type_L3 | Published features | Intended correction in a future release |
+| :--- | ---: | :--- |
+| Shallow Sediment | 2 | Remove legacy mask features from this boundary dataset |
+| Intertidal Sediment | 1 | Remove legacy feature pending comprehensive intertidal mapping |
+| Seagrass on Sediment | 4 | Remove remnants of incomplete manual seagrass mapping |
+| Seagrass on Coral Reef | 1 | Reclassify as Coral Reef |
+
+The initial goal was to map the intertidal sediment wedge between land and approximately LAT, including sediment connecting fringing reefs to the coastline. Research and mapping were not completed. Preliminary work instead produced the broader Shallow Sediment mask used with v0.3 for the UQ habitat mapping. This mask included sediment shallow enough for benthos to be visible and classified, rather than a fully defined intertidal inventory. The seagrass classes similarly remain from an initial intention to map seagrass manually that was not completed comprehensively.
+
+Comprehensive intertidal mapping and better characterisation of sand bank features remain future work. No published geometry, classifications or analysis statistics have been changed for these errata. The report omits the four class rows from its displayed stocktake, but its published total and all other statistics retain the eight features. The full generated classification table remains available with the dataset.
+
 2026-09-29:
 As part of analysing the progress in the feature count across versions of the dataset (A04) we found that v0.3 has a few adjustments that are needed to make it align with the other versions. This includes removing the shallow sediment that was added to make the masking for the habitat mapping. In addition to this we find that the Atoll Platforms class in the crosswalk maps through to Sediment. This is not wrong, particularly for the Coral Sea mapping, however when converting to L2 classification the these reefs are no longer classified as reefs. In later versions of the dataset these features are classified as Coral Reef Bank with an attachment that is Oceanic. These get mapped through to 'Coral Reef' at the L2 classification. To make v0.3 somewhat compatible we need to move the Atoll Platform classification to map through to the 'Coral Reef Bank'. This means that this crosswalk table might not suitable for use in the Coral Sea reef mapping.
 

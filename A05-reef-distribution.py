@@ -32,7 +32,7 @@ OUTPUT_CSV = (DATA_DIR / "out" / "stats" /
               f"A05_Region-stats_{VERSION}.csv")
 CHECKS_CSV = WORK_DIR / "region-stats-checks.csv"
 
-AREA_CRS = 3112
+AREA_CRS = 3577
 CHECK_REGION_OVERLAPS = True
 SLIVER_BUFFER_M = 5.0
 OVERLAP_BUFFER_M = 2.5
@@ -100,7 +100,7 @@ def cache_suffix(setting):
 
 
 def read_cached(path):
-    """Read a cached layer in EPSG:3112 with TYPE and NAME identity columns."""
+    """Read a cached layer in EPSG:3577 with TYPE and NAME identity columns."""
     layer = gpd.read_file(path).to_crs(AREA_CRS)
     if "RegionName" in layer.columns:
         layer = layer.rename(columns={"RegionName": "NAME"}).assign(TYPE="")
@@ -109,7 +109,7 @@ def read_cached(path):
 
 
 def load_regions(setting):
-    """Load named non-overlapping regions in EPSG:3112."""
+    """Load named non-overlapping regions in EPSG:3577."""
     source, field, slug = setting["source"], setting["field"], setting["slug"]
     cache = WORK_DIR / f"regions-{slug}.shp"
     if cache.exists():

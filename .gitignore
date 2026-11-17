@@ -5,3 +5,5 @@ venv_*
 data
 paper
 .idea
+.VSCodeCounter
+/metadata-temp.txt

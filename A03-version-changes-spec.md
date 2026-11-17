@@ -60,7 +60,7 @@ The `change` attribute values: `unchanged`, `improved`, `new`, `deleted`.
 ```python
 IOU_THRESHOLD = 0.50        # Minimum IoU for a substantial geometry match
 GEOM_TOLERANCE = 1e-9       # Tolerance for exact geometry comparison (degrees)
-METRIC_CRS = "EPSG:3112"    # For area calculations (IoU)
+METRIC_CRS = "EPSG:3577"    # For area calculations (IoU)
 STORAGE_CRS = "EPSG:4283"   # For output
 COMPARE_ATTRS = [
     'EdgeSrc', 'FeatConf', 'TypeConf', 'EdgeAcc_m',

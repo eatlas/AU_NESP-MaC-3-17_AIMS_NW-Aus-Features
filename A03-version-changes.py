@@ -31,7 +31,7 @@ previous_version = cfg.get("general", "previous_version")
 # ── Constants ──────────────────────────────────────────────────────────────────
 IOU_THRESHOLD = 0.50
 GEOM_TOLERANCE = 1e-9
-METRIC_CRS = "EPSG:3112"
+METRIC_CRS = "EPSG:3577"
 STORAGE_CRS = "EPSG:4283"
 COMPARE_ATTRS = [
     'EdgeSrc', 'FeatConf', 'TypeConf', 'EdgeAcc_m',

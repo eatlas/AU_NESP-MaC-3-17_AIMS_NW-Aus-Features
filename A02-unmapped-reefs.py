@@ -28,7 +28,6 @@ from shapely import make_valid
 cfg = configparser.ConfigParser()
 cfg.read("config.ini")
 in_3p_path = cfg.get("general", "in_3p_path")
-in_3p_path = 'data/v1-0/in-3p'
 version = cfg.get("general", "version")
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
@@ -57,7 +56,7 @@ MISSED_REEFS_SHP = os.path.join(OUT_DIR, "potential-missed-reefs.shp")
 REPORT_MD = f"data/{version}/out/stats/A02-unmapped-reefs_{version}.md"
 
 CRS_STORAGE = "EPSG:4283"
-CRS_METRIC = "EPSG:3112"
+CRS_METRIC = "EPSG:3577"
 
 # Cluster and size thresholds
 CLUSTER_DISTANCE_M = 100    # Minimum distance between separate clusters. Buffer is half this distance
@@ -169,7 +168,7 @@ def build_reef_clusters():
                     "RB_Type_L2": reef_type,
                     "n_parts": len(grp),
                     "c_area_km2": round(cluster_area_m2 / 1e6, 5),
-                    "eff_wid_m": round(eff_width, 1),
+                    "eff_wid_m": eff_width,
                     "size_class": _classify_size(eff_width),
                     "geometry": dissolved_geom,
                 }
@@ -316,7 +315,7 @@ def _write_markdown_report(clusters, very_small, missed_counts):
     sections = [
         f"# Assessment of previously unmapped reefs ({version})",
         "Counts refer to countable coral and rocky reef clusters unless stated otherwise. "
-        "Areas are sums of cluster areas in EPSG:3112 (km²). Percentages use the "
+        "Areas are sums of cluster areas in EPSG:3577 (km²). Percentages use the "
         "denominator stated in each caption. Supplementary tables are numbered separately.",
     ]
 
@@ -440,6 +439,8 @@ def run_analysis():
     all_clusters = build_reef_clusters()
     clusters = all_clusters[all_clusters["eff_wid_m"] >= MIN_EFF_WIDTH_M].copy().reset_index(drop=True)
     very_small = all_clusters[all_clusters["eff_wid_m"] < MIN_EFF_WIDTH_M].copy().reset_index(drop=True)
+    clusters["eff_wid_m"] = clusters["eff_wid_m"].round(1)
+    very_small["eff_wid_m"] = very_small["eff_wid_m"].round(1)
     clusters.to_file(CLUSTERS_SHP)
     print(f"  {len(clusters)} countable reef clusters built and saved.")
     print(f"  {len(very_small)} very small reef clusters (below {MIN_EFF_WIDTH_M} m threshold).")

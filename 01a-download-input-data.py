@@ -207,6 +207,24 @@ downloader.download_and_unzip(
 )
 
 # --------------------------------------------------------
+# Kathryn Markey, Mitchell Lyons, Rodney Borrego Accevedo, Stuart Phinn, Meredith Roe, Eric Lawrey, 
+# Chris Roelfsema (2025). Northern Australia shallow marine benthic and geomorphic habitat mapping - 
+# (NESP MaC 3.17, UQ, UNSW, AIMS) [Data set]. eAtlas. https://doi.org/10.26274/qeh6-p243
+# UQ shallow habitat benthic areas by region, used by A07 for comparison with
+# the current coral reef boundary mapping.
+downloader.download(
+    'https://nextcloud.eatlas.org.au/public.php/dav/files/QBRBYaisJCgXf7g/stats/A02_Habitat-area-stats.csv',
+    os.path.join(in_3p_path, 'UQ-shallow-habitat', 'A02_Habitat-area-stats.csv')
+)
+
+# Used to produce a comparison map of reef area of the South West where the habitat and reef boundary
+# mapping differ most - Helping to explain the differences in the mapping approach. Also used by A07b.
+downloader.download(
+    'https://nextcloud.eatlas.org.au/public.php/dav/files/QBRBYaisJCgXf7g/benthic/NW_NESP-MaC-3-17_UQ_Shallow-habitat_Benthic_2025.tif',
+    os.path.join(in_3p_path, 'UQ-shallow-habitat', 'NW_NESP-MaC-3-17_UQ_Shallow-habitat_Benthic_2025.tif')
+)
+
+# --------------------------------------------------------
 # Department of Climate Change, Energy, the Environment and Water. (2023). 
 # Integrated Marine and Coastal Regionalisation of Australia (IMCRA) v4.0 - Meso-scale Bioregions. [Data set].
 # https://fed.dcceew.gov.au/datasets/erin::integrated-marine-and-coastal-regionalisation-of-australia-imcra-v4-0-meso-scale-bioregions/about
